@@ -35,3 +35,9 @@ git remote add origin git@github.com:username/reponame.git
 ```shell
 git push -u origin main
 ```
+
+> post first commit, first push
+
+```bash
+cd .. && touch .gitignore
+```

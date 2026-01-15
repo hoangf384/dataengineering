@@ -1,0 +1,7 @@
+# dot file
+.env
+docker/.cassandra/
+
+grafana/*
+
+logs/*

@@ -8,6 +8,9 @@ services:
     ports:
       - "9042:9042"
 
+    env_file:
+      - .env
+
     environment:
       CASSANDRA_CLUSTER_NAME: "LearningCluster"
       CASSANDRA_SEEDS: cassandra-seed
@@ -19,6 +22,11 @@ services:
 
       MAX_HEAP_SIZE: ${CASSANDRA_MAX_HEAP}
       HEAP_NEWSIZE: ${CASSANDRA_HEAP_NEWSIZE}
+
+      CASSANDRA_LISTEN_ADDRESS: auto
+      CASSANDRA_RPC_ADDRESS: 0.0.0.0
+      CASSANDRA_BROADCAST_RPC_ADDRESS: 100.124.171.81
+      CASSANDRA_BROADCAST_ADDRESS: 100.124.171.81
 
       TZ: ${TZ}
 
@@ -35,6 +43,9 @@ services:
     restart: unless-stopped
     depends_on:
       - cassandra-seed
+
+    env_file:
+      - .env
 
     environment:
       CASSANDRA_CLUSTER_NAME: "LearningCluster"
@@ -79,6 +90,11 @@ services:
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
 
+      CASSANDRA_LISTEN_ADDRESS: auto
+      CASSANDRA_RPC_ADDRESS: 0.0.0.0
+      CASSANDRA_BROADCAST_RPC_ADDRESS: 100.124.171.81
+      CASSANDRA_BROADCAST_ADDRESS: 100.124.171.81
+
       TZ: ${TZ}
 
     volumes:
@@ -96,7 +112,7 @@ services:
       - proj-net
 
   # spark-master:
-  #   image: spark:4.0.1-scala2.13-java21-python3-r-ubuntu
+  #   image: apache/spark:3.5.1-scala2.12-java11-python3-ubuntu
 
   #   # user: "1000:1000"
   #   container_name: spark-master
@@ -104,6 +120,9 @@ services:
   #   ports:
   #     - "8080:8080"
   #     - "7077:7077"
+
+  #   env_file:
+  #     - .env
 
   #   command: >
   #     /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
@@ -130,13 +149,16 @@ services:
   #     - proj-net
 
   # spark-worker-1:
-  #   image: spark:4.0.1-scala2.13-java21-python3-r-ubuntu
+  #   image: apache/spark:3.5.1-scala2.12-java11-python3-ubuntu
 
   #   # user: "1000:1000"
   #   container_name: spark-worker-1
 
   #   depends_on:
   #     - spark-master
+
+  #   env_file:
+  #     - .env
 
   #   ports:
   #     - "8081:8081"
@@ -165,13 +187,16 @@ services:
   #     - proj-net
 
   # spark-worker-2:
-  #   image: spark:4.0.1-scala2.13-java21-python3-r-ubuntu
+  #   image: apache/spark:3.5.1-scala2.12-java11-python3-ubuntu
 
   #   # user: "1000:1000"
   #   container_name: spark-worker-2
 
   #   depends_on:
   #     - spark-master
+
+  #   env_file:
+  #     - .env
 
   #   ports:
   #     - "8082:8082"
@@ -204,6 +229,9 @@ services:
   #   container_name: grafana
 
   #   user: "0"
+
+  #   env_file:
+  #     - .env
 
   #   ports:
   #     - "3000:3000"

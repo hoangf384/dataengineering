@@ -79,7 +79,7 @@ df = (
      )
      .option("driver", "com.mysql.cj.jdbc.Driver")
      .option("user", "spark")
-     .option("password", "spark")
+     .option("password", "spark") # 
      .option("query", "SELECT 1 AS ok")
      .load()
 )

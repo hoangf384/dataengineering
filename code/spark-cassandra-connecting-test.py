@@ -8,7 +8,7 @@ spark = (
 )
 
 spark.read.format("org.apache.spark.sql.cassandra").options(
-    keyspace="recruitment", table="tracking"
+    keyspace="kstest", table="test"
 ).load().show()
 
 spark.stop()

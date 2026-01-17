@@ -11,7 +11,7 @@
 kết nối từ spark tới database mong muốn
 
 ## chuẩn bị
-file jdbc của mysql và cassandra
+file jdbc của mysql, spark-cassandra connector của cassandra phân phối
 tailscale (ưu tiên tải trực tiếp bằng repo manager: dnf hoặc apt)
 tài khoản github, google
 
@@ -93,4 +93,29 @@ kết quả:
 |  1|
 +---+
 ``` 
+> như trên là thành công
+
+### Cassandra
+Để kết nối từ spark tới cassandra thì khác một xíu, cassandra không dùng connector chuẩn java mà dùng bản tự phân phối chính là `spark-cassandra-assembly_2.12-3.5.1.jar` trong đó `2.12` là scala version còn `3.5.1` là supported version của spark, mọi người nên tải đúng image spark có những thông số trên nhé
+
+link file [jars](https://mvnrepository.com/artifact/com.datastax.spark/spark-cassandra-connector-assembly_2.12/3.5.1)
+link [homepage](https://github.com/apache/cassandra-spark-connector)
+
+> vào cqlsh ở server nhé 
+```bash
+docker exec -it cassandra-seed cqlsh
+```
+```bash
+create keyspace kstest WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+create table kstest.test (id int primary key, name text);
+insert into kstest.test (id, name) values (1, 'test');
+```
+> cái này phải config spark session từ đầu nên không viết code được, xem ở file code/spark-cassandra-connector-test.py để biết code như nào nhé
+```bash
+docker exec -it spark-master bash 
+```
+
+```bash
+/opt/spark/bin/spark-submit --jars /opt/spark/jars_external/spark-cassandra-connector-assembly_2.12-3.5.1.jar /code/spark-cassandra-connector-test.py
+```
 chúc bạn kết nối thành công!

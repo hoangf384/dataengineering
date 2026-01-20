@@ -3,6 +3,8 @@
 import logging
 import os
 import uuid
+from argparse import OPTIONAL
+from typing import Optional
 
 # pyspark lib
 from pyspark.sql import DataFrame, SparkSession
@@ -26,7 +28,10 @@ logger = logging.getLogger(__name__)
 spark = (
     SparkSession.builder.appName("Local-ETL-Test")
     .master("spark://spark-master:7077")
-    .config("spark.driver.memory", "2g")
+    .config("spark.driver.memory", "1g")
+    .config(
+        "spark.sql.extensions", "com.datastax.spark.connector.CassandraSparkExtensions"
+    )
     .config(
         "spark.sql.files.maxPartitionBytes", 256 * 1024 * 1024
     )  # 256 * 1024 * 1024 bytes
@@ -76,7 +81,7 @@ def write_data(final: DataFrame):
 ###### transform function ######
 
 
-def normalize_event_time(df: DataFrame):
+def normalize_event_time(df: DataFrame) -> DataFrame:  # chưa hiểu, chưa tối ưu
     """
     Convert Cassandra TimeUUID to timestamp string
     """
@@ -92,7 +97,9 @@ def normalize_event_time(df: DataFrame):
     return df.withColumn("ts", timeuuid_to_ts(col("create_time")))
 
 
-def build_base_event(df: DataFrame) -> DataFrame:
+def build_base_event(
+    df: DataFrame,
+) -> DataFrame:  # đã tối ưu hết cỡ, chỉ là select thôi
     """
     Select necessary event-level columns
     """
@@ -100,7 +107,7 @@ def build_base_event(df: DataFrame) -> DataFrame:
     df = df.select(
         "create_time",
         "job_id",
-        ## chatgpt bảo thêm "ts" nữa mà t k biết
+        "ts",  # -> tự thêm chỉ số này
         "custom_track",
         "bid",
         "campaign_id",
@@ -111,13 +118,14 @@ def build_base_event(df: DataFrame) -> DataFrame:
     return df
 
 
-def aggregate_click(df: DataFrame) -> DataFrame:
+def aggregate_function(
+    df: DataFrame, filter_condition: str, col_name: Optional[str] = None
+) -> DataFrame:  # có thể tối ưu thêm
     """
-    Aggregate click data
+    Aggregate conversion data
     """
-
-    #
-    df = df.filter(col("custom_track") == "click").groupBy(
+    # 1. Filtering
+    df = df.filter(col("custom_track") == filter_condition).groupBy(
         F.to_date("ts").alias("date"),
         F.hour("ts").alias("hour"),
         "job_id",
@@ -126,74 +134,22 @@ def aggregate_click(df: DataFrame) -> DataFrame:
         "group_id",
     )
 
-    #
-    df = df.agg(
-        F.round(F.avg("bid"), 2).alias("bid_set"),
-        F.sum("bid").alias("spend_hour"),
-        F.count("*").alias("click"),
-    )
-
-    return df
-
-
-def aggregate_conversion(df: DataFrame) -> DataFrame:
-    """
-    Aggregate conversion data
-    """
-    df = (
-        df.filter(col("custom_track") == "conversion")
-        .groupBy(
-            F.to_date("ts").alias("date"),
-            F.hour("ts").alias("hour"),
-            "job_id",
-            "publisher_id",
-            "campaign_id",
-            "group_id",
+    # 2. Xử lý riêng cho trường hợp 'click'
+    if filter_condition == "click":
+        df = df.agg(
+            F.round(F.avg("bid"), 2).alias("bid_set"),
+            F.sum("bid").alias("spend_hour"),
+            F.count("*").alias("clicks"),
         )
-        .agg(F.count("*").alias("conversion"))
-    )
 
-    return df
+        return df
 
+    # 3. Xử lý cho các trường hợp còn lại (conversion, qualified...)
+    else:
+        col_name = col_name if col_name else filter_condition
+        df = df.agg(F.count("*").alias(col_name))
 
-def aggregate_qualified(df: DataFrame) -> DataFrame:
-    """
-    Aggregate qualified data
-    """
-    df = (
-        df.filter(col("custom_track") == "qualified")
-        .groupBy(
-            F.to_date("ts").alias("date"),
-            F.hour("ts").alias("hour"),
-            "job_id",
-            "publisher_id",
-            "campaign_id",
-            "group_id",
-        )
-        .agg(F.count("*").alias("qualified"))
-    )
-    return df
-
-
-def aggregate_unqualified(df: DataFrame) -> DataFrame:
-    """
-    Aggregate unqualified data
-    """
-
-    df = (
-        df.filter(col("custom_track") == "unqualified")
-        .groupBy(
-            F.to_date("ts").alias("date"),
-            F.hour("ts").alias("hour"),
-            "job_id",
-            "publisher_id",
-            "campaign_id",
-            "group_id",
-        )
-        .agg(F.count("*").alias("unqualified"))
-    )
-
-    return df
+        return df
 
 
 def merge_metrics(
@@ -201,35 +157,21 @@ def merge_metrics(
     conversion: DataFrame,
     qualified: DataFrame,
     unqualified: DataFrame,
-) -> DataFrame:
-    """
-    Merge metrics
-    """
+) -> DataFrame:  # join 4 lần -> có thể tối ưu thêm
+    join_cols = ["date", "hour", "job_id", "publisher_id", "campaign_id", "group_id"]
 
-    # merge conversion
-    click = click.join(
-        conversion,
-        on=["date", "hour", "job_id", "publisher_id", "campaign_id", "group_id"],
-        how="full",
+    result = (
+        click.join(conversion, on=join_cols, how="full")
+        .join(qualified, on=join_cols, how="full")
+        .join(unqualified, on=join_cols, how="full")
     )
 
-    # merge qualified
-    click = click.join(
-        qualified,
-        on=["date", "hour", "job_id", "publisher_id", "campaign_id", "group_id"],
-        how="full",
-    )
-
-    # merge unqualified
-    click = click.join(
-        unqualified,
-        on=["date", "hour", "job_id", "publisher_id", "campaign_id", "group_id"],
-        how="full",
-    )
-    return click
+    return result
 
 
-def enrich_job_dimension(df: DataFrame, jobs_df: DataFrame) -> DataFrame:
+def enrich_job_dimension(
+    df: DataFrame, jobs_df: DataFrame
+) -> DataFrame:  # chưa đọc chưa tối ưu
     """
     Enrich job dimension
     """
@@ -242,7 +184,9 @@ def enrich_job_dimension(df: DataFrame, jobs_df: DataFrame) -> DataFrame:
     return df
 
 
-def add_metadata(df: DataFrame, source_df: DataFrame) -> DataFrame:
+def add_metadata(
+    df: DataFrame, source_df: DataFrame
+) -> DataFrame:  # chưa đọc chưa tối ưu
     """
     Add metadata into dataframe
     """
@@ -272,10 +216,11 @@ def transform_data(df: DataFrame) -> DataFrame:
     base_df = build_base_event(df).cache()
 
     logger.info("Aggregating metrics")
-    click = aggregate_click(base_df)
-    conversion = aggregate_conversion(base_df)
-    qualified = aggregate_qualified(base_df)
-    unqualified = aggregate_unqualified(base_df)
+
+    click = aggregate_function(base_df, "click")
+    conversion = aggregate_function(base_df, "conversion")
+    qualified = aggregate_function(base_df, "qualified")
+    unqualified = aggregate_function(base_df, "unqualified")
 
     logger.info("Merging metrics")
     fact_df = merge_metrics(click, conversion, qualified, unqualified)
@@ -288,7 +233,7 @@ def transform_data(df: DataFrame) -> DataFrame:
 
 ###### CONTROL FLOW ######
 def control_flow():
-    """ "abc"""
+    """abc"""
 
     # read data from database
     logger.info("reading data from Cassandra")

@@ -3,7 +3,7 @@
 import logging
 import os
 import uuid
-from argparse import OPTIONAL
+from datetime import datetime, timezone
 from typing import Optional
 
 # pyspark lib
@@ -13,10 +13,15 @@ from pyspark.sql.functions import col, udf
 from pyspark.sql.types import StringType
 
 # variables
+TAILSCALE_IP = os.getenv("TAILSCALE_IP")
+
 MYSQL_USER = os.getenv("MYSQL_USER")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
-TAILSCALE_IP = os.getenv("TAILSCALE_IP")
+URL = f"jdbc:mysql://{TAILSCALE_IP}:3306{MYSQL_DATABASE}\
+    ?allowPublicKeyRetrieval=true&useSSL=false"
+NUM_100NS_INTERVALS_SINCE_UUID_EPOCH = 0x01B21DD213814000
+
 
 # logging
 logging.basicConfig(
@@ -29,9 +34,6 @@ spark = (
     SparkSession.builder.appName("Local-ETL-Test")
     .master("spark://spark-master:7077")
     .config("spark.driver.memory", "1g")
-    .config(
-        "spark.sql.extensions", "com.datastax.spark.connector.CassandraSparkExtensions"
-    )
     .config(
         "spark.sql.files.maxPartitionBytes", 256 * 1024 * 1024
     )  # 256 * 1024 * 1024 bytes
@@ -46,27 +48,65 @@ spark.sparkContext.setLogLevel("ERROR")
 
 
 ###### IO HELPERS ######
-def read_data():
-    """READ Data from Cassandra"""
-    df = spark.read.format("org.apache.spark.sql.Cassandra").load(
-        keyspace="recruitment", table="tracking", read_conf={"fetch_size": 1000}
-    )
+def read_data(database: str) -> DataFrame:
+    """
+    Read data from source database.
 
-    return df
+    Parameters
+    ----------
+    database : str
+        Data source name: 'cassandra' or 'mysql'
+
+    Returns
+    -------
+    DataFrame
+    """
+    db = database.lower()
+
+    if db == "cassandra":
+        df = spark.read.format("org.apache.spark.sql.cassandra").load(
+            keyspace="recruitment", table="tracking", read_conf={"fetch_size": 1000}
+        )
+        return df
+
+    elif db == "mysql":
+        sql = "SELECT id AS job_id, company_id, campaign_id, group_id FROM job"
+        df = (
+            spark.read.format("jdbc")
+            .options(
+                url=URL,
+                driver="com.mysql.cj.jdbc.Driver",
+                dbtable=sql,
+                user=MYSQL_USER,
+                password=MYSQL_PASSWORD,
+            )
+            .load()
+        )
+        return df
+
+    else:
+        raise ValueError(
+            f"Unsupported database '{database}'. Expected 'cassandra' or 'mysql'."
+        )
 
 
 def write_data(final: DataFrame):
-    """WRITE DATA TO MYSQL"""
+    """
+    write data to MySQL.
 
-    url = (
-        f"jdbc:mysql://{TAILSCALE_IP}:3306",
-        "?allowPublicKeyRetrieval=true&useSSL=false",
-    )
+    Parameters
+    ----------
+    final: DataFrame
+
+    Returns
+    -------
+    None
+    """
 
     (
         final.write.format("jdbc")
         .option("driver", "com.mysql.cj.jdbc.Driver")
-        .option("url", url)
+        .option("url", URL)
         .option("dbtable", "events")
         .mode("append")
         .option("user", MYSQL_USER)
@@ -79,29 +119,46 @@ def write_data(final: DataFrame):
 
 
 ###### transform function ######
+@udf(returnType=StringType())
+def timeuuid_to_ts(uuid_str: Optional[str]) -> Optional[str]:
+    if not uuid_str:
+        return None
+
+    try:
+        u = uuid.UUID(uuid_str)
+        if u.version != 1:
+            return None
+
+        ts = (u.time - NUM_100NS_INTERVALS_SINCE_UUID_EPOCH) / 1e7
+        return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+    except ValueError as v:
+        logger.error("Failed to parse timeuuid %s: %s", uuid_str, v)
+        return None
+    except Exception as e:
+        logger.warning("Failed to parse timeuuid %s: %s", uuid_str, e)
+        return None
 
 
-def normalize_event_time(df: DataFrame) -> DataFrame:  # chưa hiểu, chưa tối ưu
+def normalize_event_time(df: DataFrame) -> DataFrame:
     """
     Convert Cassandra TimeUUID to timestamp string
+    using Python built-in uuid (UUID v1).
     """
-
-    @udf(returnType=StringType())
-    def timeuuid_to_ts(x):
-        return (
-            time_uuid.TimeUUID(bytes=UUID(x).bytes)
-            .get_datetime()
-            .strftime("%Y-%m-%d %H:%M:%S")
-        )
-
     return df.withColumn("ts", timeuuid_to_ts(col("create_time")))
 
 
-def build_base_event(
-    df: DataFrame,
-) -> DataFrame:  # đã tối ưu hết cỡ, chỉ là select thôi
+def build_base_event(df: DataFrame) -> DataFrame:
     """
-    Select necessary event-level columns
+    Get useful event data
+
+    Parameters
+    ----------
+    df: DataFrame
+
+    Returns
+    -------
+    DataFrame
     """
 
     df = df.select(
@@ -122,7 +179,19 @@ def aggregate_function(
     df: DataFrame, filter_condition: str, col_name: Optional[str] = None
 ) -> DataFrame:  # có thể tối ưu thêm
     """
-    Aggregate conversion data
+    aggregate, filtering, rolling data
+
+    Parameters
+    ----------
+    df : DataFrame
+
+    Filter condition: str
+
+    Column name: str | None
+
+    Returns
+    -------
+    DataFrame
     """
     # 1. Filtering
     df = df.filter(col("custom_track") == filter_condition).groupBy(
@@ -190,7 +259,16 @@ def add_metadata(
     """
     Add metadata into dataframe
     """
-    max_ts = source_df.agg(F.max("ts")).collect()[0][0]
+    try:
+        max_ts_row = source_df.agg(F.max("ts")).collect()
+        max_ts = (
+            max_ts_row[0][0]
+            if max_ts_row
+            else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
+    except Exception as e:
+        logger.warning("Failed to compute max(ts), fallback to now(): %s", e)
+        max_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     df = (
         df.withColumn("updated_at", F.lit(max_ts))
@@ -204,7 +282,7 @@ def add_metadata(
     return df
 
 
-def transform_data(df: DataFrame) -> DataFrame:
+def transform_data(df: DataFrame, jobs_df: DataFrame) -> DataFrame:
     """
     Transform data
     """
@@ -225,6 +303,9 @@ def transform_data(df: DataFrame) -> DataFrame:
     logger.info("Merging metrics")
     fact_df = merge_metrics(click, conversion, qualified, unqualified)
 
+    logger.info("Enriching Job Dimension")
+    fact_df = enrich_job_dimension(fact_df, jobs_df)
+
     logger.info("Adding metadata")
     final = add_metadata(fact_df, base_df)
 
@@ -237,12 +318,13 @@ def control_flow():
 
     # read data from database
     logger.info("reading data from Cassandra")
-    df = read_data()
+    df = read_data("cassandra")
+    jobs = read_data("mysql")
     df.show(10, truncate=False)
 
     # transfroming data
     logger.info("transforming data...")
-    final = transform_data(df)
+    final = transform_data(df, jobs)
     final.show(10, truncate=False)
 
     # writing data to database

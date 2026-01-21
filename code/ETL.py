@@ -70,6 +70,7 @@ def read_data(database: str) -> DataFrame:
     -------
     DataFrame
     """
+
     db = database.lower()
 
     if db == "cassandra":
@@ -133,8 +134,6 @@ def schema_check(
     df: DataFrame, required_columns: Iterable[str], stage: str = "unknown"
 ) -> None:
     """
-    Schema check - Make it work
-
     Validate that DataFrame contains all required columns.
     Fail fast if any required column is missing.
 
@@ -174,6 +173,20 @@ def validate_custom_track_enum(
     """
     Validate custom_track values.
     Fail fast if any unexpected value is found.
+
+    Parameters
+    ----------
+    df: DataFrame
+        Input DataFrame containing the 'custom_track' column.
+    allowed_values: Set[str]
+        Set of allowed values for the 'custom_track' column.
+    stage: str
+        Name of the stage where validation is performed.
+
+    Raises
+    ------
+    ValueError
+        if any unexpected values are found.
     """
 
     actual_values = {
@@ -269,26 +282,27 @@ def timeuuid_to_ts(uuid_str: Optional[str]) -> Optional[str]:
 
 def normalize_event_time(df: DataFrame) -> DataFrame:
     """
-    Adds a 'ts' column to the DataFrame by converting 'create_time'.
+    Adds a `ts` column to the DataFrame by converting `create_time`.
 
-    This function applies the timeuuid_to_ts (UDF) to the 'create_time' column.
+    This function applies the `timeuuid_to_ts (@UDF)` to the `create_time` column.
 
     Parameters
     ----------
     df : DataFrame
-        Input DataFrame containing the 'create_time' column.
+        Input DataFrame containing the `create_time` column.
 
     Returns
     -------
     DataFrame
-        DataFrame with the new 'ts' column added.
+        DataFrame with the new `ts` column added.
     """
-    return df.withColumn("ts", timeuuid_to_ts(col("create_time")))
+    df = df.withColumn("ts", timeuuid_to_ts(col("create_time")))
+    return df
 
 
 def build_base_event(df: DataFrame) -> DataFrame:
     """
-    Get useful event data
+    Get useful events data
 
     Parameters
     ----------
@@ -315,7 +329,7 @@ def build_base_event(df: DataFrame) -> DataFrame:
 
 def aggregate_metrics_single_pass(df: DataFrame) -> DataFrame:
     """
-    aggregate_metrics_single_pass
+    aggregate metric single pass
 
     Parameters
     ----------
@@ -366,6 +380,18 @@ def enrich_job_dimension(
 ) -> DataFrame:  # chưa đọc chưa tối ưu
     """
     Enrich job dimension
+
+    Parameters
+    ----------
+    df : DataFrame
+        Input DataFrame
+    jobs_df : DataFrame
+        Job dimension DataFrame
+
+    Returns
+    -------
+    DataFrame
+        Enriched DataFrame
     """
     df = (
         df.join(jobs_df, on="job_id", how="left")
@@ -378,7 +404,17 @@ def enrich_job_dimension(
 
 def add_metadata(df: DataFrame) -> DataFrame:
     """
-    Processing-time metadata (make it work)
+    add column procesed_at by using `current_timestamp()`
+
+    Parameters
+    ----------
+    df: DataFrame
+        Input DataFrame
+
+    Returns
+    -------
+    DataFrame
+
     """
     df = df.withColumn("processed_at", F.current_timestamp()).withColumn(
         "source", F.lit("Cassandra")
@@ -392,6 +428,11 @@ def compute_event_watermark(
     """
     Compute max event-time watermark.
     Fail fast if ts is invalid.
+
+    Parameters
+    ----------
+    source_df: DataFrame
+        Input DataFrame
     """
 
     df = source_df.withColumn("_ts", F.to_timestamp(col(ts_col), "yyyy-MM-dd HH:mm:ss"))
@@ -415,7 +456,19 @@ def compute_event_watermark(
 
 def transform_data(df: DataFrame, jobs_df: DataFrame) -> DataFrame:
     """
-    Transform data
+    Transform data function. This function is used to manage the transformation process of the input DataFrame.
+
+    Parameters
+    ----------
+    df: DataFrame
+        Input DataFrame
+    jobs_df: DataFrame
+        Input job dimension DataFrame
+
+    Returns
+    -------
+    DataFrame
+        Transformed DataFrame
     """
 
     logger.info("Normalizing event time")
@@ -454,7 +507,13 @@ def transform_data(df: DataFrame, jobs_df: DataFrame) -> DataFrame:
 
 ###### CONTROL FLOW ######
 def control_flow():
-    """abc"""
+    """
+    Control flow function. This function is used to manage all the ETL process
+    1. Read data from Cassandra, MySQL
+    2. Schema checked data
+    3. Transform data
+    4. Write data to MySQL
+    """
 
     # read data from database
     logger.info("reading data from Cassandra")

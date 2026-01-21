@@ -18,7 +18,7 @@ TAILSCALE_IP = os.getenv("TAILSCALE_IP")
 MYSQL_USER = os.getenv("MYSQL_USER")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
-URL = f"jdbc:mysql://{TAILSCALE_IP}:3306{MYSQL_DATABASE}\
+URL = f"jdbc:mysql://{TAILSCALE_IP}:3306/{MYSQL_DATABASE}\
     ?allowPublicKeyRetrieval=true&useSSL=false"
 NUM_100NS_INTERVALS_SINCE_UUID_EPOCH = 0x01B21DD213814000
 # database variables
@@ -31,14 +31,6 @@ SCHEMA = (
     "group_id",
     "publisher_id",
 )
-METRIC_COLUMNS = [
-    "clicks",
-    "conversions",
-    "qualifieds",
-    "unqualifieds",
-    "alives",
-    "interview_scheduleds",
-]
 
 # logging
 logging.basicConfig(
@@ -87,7 +79,7 @@ def read_data(database: str) -> DataFrame:
         return df
 
     elif db == "mysql":
-        sql = "SELECT id AS job_id, company_id, campaign_id, group_id FROM job"
+        sql = "(SELECT id AS job_id, company_id, campaign_id, group_id FROM job) as job_sub"
         df = (
             spark.read.format("jdbc")
             .options(
@@ -321,71 +313,52 @@ def build_base_event(df: DataFrame) -> DataFrame:
     return df
 
 
-def aggregate_function(
-    df: DataFrame, filter_condition: str, col_name: Optional[str] = None
-) -> DataFrame:  # có thể tối ưu thêm
+def aggregate_metrics_single_pass(df: DataFrame) -> DataFrame:
     """
-    aggregate, filtering, rolling data
+    aggregate_metrics_single_pass
 
     Parameters
     ----------
-    df : DataFrame
-
-    Filter condition: str
-
-    Column name: str | None
+        df: DataFrame
 
     Returns
     -------
-    DataFrame
+        DataFrame
     """
 
-    df = df.filter(col("custom_track") == filter_condition).groupBy(
-        F.to_date("ts").alias("date"),
-        F.hour("ts").alias("hour"),
+    # 1. define conditions
+    is_click = col("custom_track") == "click"
+    is_conversion = col("custom_track") == "conversion"
+    is_qualified = col("custom_track") == "qualified"
+    is_unqualified = col("custom_track") == "unqualified"
+    # is_alive = col("custom_track") == "alive"
+    # is_interview = col("custom_track") == "interview_scheduled"
+
+    # 2. implement grouby and aggregate function together
+    df = df.groupBy(
+        F.to_date("ts").alias("dates"),
+        F.hour("ts").alias("hours"),
         "job_id",
         "publisher_id",
         "campaign_id",
         "group_id",
+    ).agg(
+        # --- Metrics cho Click (Có tính tiền) ---
+        # COUNT(IF(track='click', 1, 0))
+        F.sum(F.when(is_click, 1).otherwise(0)).alias("clicks"),
+        # AVG(IF(track='click', bid, NULL)) -> NULL để không ảnh hưởng trung bình
+        F.round(F.avg(F.when(is_click, col("bid"))), 2).alias("bid_set"),
+        # SUM(IF(track='click', bid, 0))
+        F.sum(F.when(is_click, col("bid")).otherwise(0)).alias("spend_hour"),
+        # --- Metrics cho các loại khác (Chỉ đếm) ---
+        F.sum(F.when(is_conversion, 1).otherwise(0)).alias("conversion"),
+        F.sum(F.when(is_qualified, 1).otherwise(0)).alias("qualified_application"),
+        F.sum(F.when(is_unqualified, 1).otherwise(0)).alias("disqualified_application"),
+        # F.sum(F.when(is_alive, 1).otherwise(0)).alias("alives"),
+        # F.sum(F.when(is_interview, 1).otherwise(0)).alias("interview_scheduleds"),
     )
 
-    # 2. Xử lý riêng cho trường hợp 'click'
-    if filter_condition == "click":
-        df = df.agg(
-            F.round(F.avg("bid"), 2).alias("bid_set"),
-            F.sum("bid").alias("spend_hour"),
-            F.count("*").alias("clicks"),
-        )
-
-        return df
-
-    # 3. Xử lý cho các trường hợp còn lại (conversion, qualified...)
-    else:
-        col_name = col_name if col_name else filter_condition
-        df = df.agg(F.count("*").alias(col_name + "s"))
-
-        return df
-
-
-def merge_metrics(
-    click: DataFrame,
-    conversion: DataFrame,
-    qualified: DataFrame,
-    unqualified: DataFrame,
-    alive: DataFrame,
-    interview: DataFrame,
-) -> DataFrame:  # join 6 lần -> có thể tối ưu thêm
-    join_cols = ["date", "hour", "job_id", "publisher_id", "campaign_id", "group_id"]
-
-    result = (
-        click.join(conversion, on=join_cols, how="full")
-        .join(qualified, on=join_cols, how="full")
-        .join(unqualified, on=join_cols, how="full")
-        .join(alive, on=join_cols, how="full")
-        .join(interview, on=join_cols, how="full")
-    )
-
-    return result
+    return df
 
 
 def enrich_job_dimension(
@@ -462,23 +435,12 @@ def transform_data(df: DataFrame, jobs_df: DataFrame) -> DataFrame:
             "conversion",
             "qualified",
             "unqualified",
-            "alive",
-            "interview_scheduled",
         },
         stage="custom_track_validation",
     )
 
     logger.info("Aggregating metrics")
-    click = aggregate_function(base_df, "click")
-    conversion = aggregate_function(base_df, "conversion")
-    qualified = aggregate_function(base_df, "qualified")
-    unqualified = aggregate_function(base_df, "unqualified")
-    alive = aggregate_function(base_df, "alive")
-    interview = aggregate_function(base_df, "interview_scheduled")
-
-    logger.info("Merging metrics")
-    fact_df = merge_metrics(click, conversion, qualified, unqualified, alive, interview)
-    fact_df = fact_df.fillna(0, subset=METRIC_COLUMNS)
+    fact_df = aggregate_metrics_single_pass(base_df)
 
     logger.info("Enriching Job Dimension")
     fact_df = enrich_job_dimension(fact_df, jobs_df)

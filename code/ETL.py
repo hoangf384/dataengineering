@@ -4,7 +4,7 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Iterable, Optional, Set
 
 # pyspark lib
 from pyspark.sql import DataFrame, SparkSession
@@ -21,7 +21,24 @@ MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
 URL = f"jdbc:mysql://{TAILSCALE_IP}:3306{MYSQL_DATABASE}\
     ?allowPublicKeyRetrieval=true&useSSL=false"
 NUM_100NS_INTERVALS_SINCE_UUID_EPOCH = 0x01B21DD213814000
-
+# database variables
+SCHEMA = (
+    "create_time",
+    "job_id",
+    "custom_track",
+    "bid",
+    "campaign_id",
+    "group_id",
+    "publisher_id",
+)
+METRIC_COLUMNS = [
+    "clicks",
+    "conversions",
+    "qualifieds",
+    "unqualifieds",
+    "alives",
+    "interview_scheduleds",
+]
 
 # logging
 logging.basicConfig(
@@ -65,7 +82,7 @@ def read_data(database: str) -> DataFrame:
 
     if db == "cassandra":
         df = spark.read.format("org.apache.spark.sql.cassandra").load(
-            keyspace="recruitment", table="tracking", read_conf={"fetch_size": 1000}
+            keyspace="recruitment", table="tracking", read_conf={"fetch_size": 10000}
         )
         return df
 
@@ -79,6 +96,7 @@ def read_data(database: str) -> DataFrame:
                 dbtable=sql,
                 user=MYSQL_USER,
                 password=MYSQL_PASSWORD,
+                batchsize=10000,
             )
             .load()
         )
@@ -118,9 +136,126 @@ def write_data(final: DataFrame):
     logger.info("Data written to MySQL successfully")
 
 
+###### validation function ######
+def schema_check(
+    df: DataFrame, required_columns: Iterable[str], stage: str = "unknown"
+) -> None:
+    """
+    Schema check - Make it work
+
+    Validate that DataFrame contains all required columns.
+    Fail fast if any required column is missing.
+
+    Parameters
+    ----------
+    df : DataFrame
+        Input Spark DataFrame
+    required_columns : Iterable[str]
+        Columns that MUST exist for the pipeline to work
+    stage : str
+        Pipeline stage name (for logging / debugging)
+
+    Raises
+    ------
+    ValueError
+        If any required column is missing
+    """
+
+    actual_cols = set(df.columns)
+    required_cols = set(required_columns)
+
+    missing_cols = required_cols - actual_cols
+
+    if missing_cols:
+        raise ValueError(
+            f"[SCHEMA_CHECK][{stage}] "
+            f"Missing required columns: {sorted(missing_cols)}. "
+            f"Actual columns: {sorted(actual_cols)}"
+        )
+
+
+def validate_custom_track_enum(
+    df: DataFrame,
+    allowed_values: Set[str],
+    stage: str = "custom_track_validation",
+) -> None:
+    """
+    Validate custom_track values.
+    Fail fast if any unexpected value is found.
+    """
+
+    actual_values = {
+        row["custom_track"]
+        for row in df.select("custom_track").distinct().collect()
+        if row["custom_track"] is not None
+    }
+
+    unexpected = actual_values - allowed_values
+
+    if unexpected:
+        raise ValueError(
+            f"[{stage}] Unexpected custom_track values found: "
+            f"{sorted(unexpected)}. "
+            f"Allowed values: {sorted(allowed_values)}"
+        )
+
+
+def validate_event_timestamp(
+    df: DataFrame, ratio: float = 0.0, stage: str = "normalize_event_time"
+) -> None:
+    """
+    Validate ts column after timeuuid normalization.
+    Fail fast if invalid timestamp rate exceeds threshold.
+
+    Parameters
+    ----------
+    df : DataFrame
+        Input DataFrame containing the 'ts' column.
+    ratio : float
+        Maximum allowed ratio of invalid timestamps.
+    stage : str
+        Name of the stage where validation is performed.
+
+    Raises
+    ------
+    ValueError
+        If the invalid timestamp rate exceeds the threshold.
+    """
+
+    total = df.count()
+    invalid = df.filter(col("ts").isNull()).count()
+
+    if total == 0:
+        raise ValueError(f"[{stage}] Input DataFrame is empty")
+
+    invalid_ratio = invalid / total
+
+    if invalid_ratio > ratio:
+        raise ValueError(
+            f"[{stage}] Invalid ts detected: "
+            f"{invalid}/{total} rows ({invalid_ratio:.2%})"
+        )
+
+
 ###### transform function ######
 @udf(returnType=StringType())
 def timeuuid_to_ts(uuid_str: Optional[str]) -> Optional[str]:
+    """
+    User Defined Function (UDF) to convert Cassandra UUID to timestamp string.
+
+    Uses python built-in module (uuid) to extract the timestamp.
+
+    Parameters
+    ----------
+    uuid_str : str or None
+        The UUID string from Cassandra (TimeUUID version 1).
+
+    Returns
+    -------
+    str or None
+        The formatted timestamp string '%Y-%m-%d %H:%M:%S' if valid,
+        otherwise None.
+    """
     if not uuid_str:
         return None
 
@@ -142,8 +277,19 @@ def timeuuid_to_ts(uuid_str: Optional[str]) -> Optional[str]:
 
 def normalize_event_time(df: DataFrame) -> DataFrame:
     """
-    Convert Cassandra TimeUUID to timestamp string
-    using Python built-in uuid (UUID v1).
+    Adds a 'ts' column to the DataFrame by converting 'create_time'.
+
+    This function applies the timeuuid_to_ts (UDF) to the 'create_time' column.
+
+    Parameters
+    ----------
+    df : DataFrame
+        Input DataFrame containing the 'create_time' column.
+
+    Returns
+    -------
+    DataFrame
+        DataFrame with the new 'ts' column added.
     """
     return df.withColumn("ts", timeuuid_to_ts(col("create_time")))
 
@@ -193,7 +339,7 @@ def aggregate_function(
     -------
     DataFrame
     """
-    # 1. Filtering
+
     df = df.filter(col("custom_track") == filter_condition).groupBy(
         F.to_date("ts").alias("date"),
         F.hour("ts").alias("hour"),
@@ -216,7 +362,7 @@ def aggregate_function(
     # 3. Xử lý cho các trường hợp còn lại (conversion, qualified...)
     else:
         col_name = col_name if col_name else filter_condition
-        df = df.agg(F.count("*").alias(col_name))
+        df = df.agg(F.count("*").alias(col_name + "s"))
 
         return df
 
@@ -226,13 +372,17 @@ def merge_metrics(
     conversion: DataFrame,
     qualified: DataFrame,
     unqualified: DataFrame,
-) -> DataFrame:  # join 4 lần -> có thể tối ưu thêm
+    alive: DataFrame,
+    interview: DataFrame,
+) -> DataFrame:  # join 6 lần -> có thể tối ưu thêm
     join_cols = ["date", "hour", "job_id", "publisher_id", "campaign_id", "group_id"]
 
     result = (
         click.join(conversion, on=join_cols, how="full")
         .join(qualified, on=join_cols, how="full")
         .join(unqualified, on=join_cols, how="full")
+        .join(alive, on=join_cols, how="full")
+        .join(interview, on=join_cols, how="full")
     )
 
     return result
@@ -253,33 +403,41 @@ def enrich_job_dimension(
     return df
 
 
-def add_metadata(
-    df: DataFrame, source_df: DataFrame
-) -> DataFrame:  # chưa đọc chưa tối ưu
+def add_metadata(df: DataFrame) -> DataFrame:
     """
-    Add metadata into dataframe
+    Processing-time metadata (make it work)
     """
-    try:
-        max_ts_row = source_df.agg(F.max("ts")).collect()
-        max_ts = (
-            max_ts_row[0][0]
-            if max_ts_row
-            else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        )
-    except Exception as e:
-        logger.warning("Failed to compute max(ts), fallback to now(): %s", e)
-        max_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    df = (
-        df.withColumn("updated_at", F.lit(max_ts))
-        .withColumn("sources", F.lit("Cassandra"))
-        .withColumnRenamed("date", "dates")
-        .withColumnRenamed("hour", "hours")
-        .withColumnRenamed("qualified", "qualified_application")
-        .withColumnRenamed("unqualified", "disqualified_application")
-        .withColumnRenamed("click", "clicks")
+    df = df.withColumn("processed_at", F.current_timestamp()).withColumn(
+        "source", F.lit("Cassandra")
     )
     return df
+
+
+def compute_event_watermark(
+    source_df: DataFrame, ts_col: str = "ts", stage: str = "event_watermark"
+) -> datetime:
+    """
+    Compute max event-time watermark.
+    Fail fast if ts is invalid.
+    """
+
+    df = source_df.withColumn("_ts", F.to_timestamp(col(ts_col), "yyyy-MM-dd HH:mm:ss"))
+
+    total = df.count()
+    invalid = df.filter(col("_ts").isNull()).count()
+
+    if total == 0:
+        raise ValueError(f"[{stage}] source_df is empty")
+
+    if invalid > 0:
+        raise ValueError(f"[{stage}] Found {invalid}/{total} invalid event timestamps")
+
+    watermark = df.agg(F.max("_ts")).collect()[0][0]
+
+    if watermark is None:
+        raise ValueError(f"[{stage}] watermark is NULL")
+
+    return watermark
 
 
 def transform_data(df: DataFrame, jobs_df: DataFrame) -> DataFrame:
@@ -290,24 +448,44 @@ def transform_data(df: DataFrame, jobs_df: DataFrame) -> DataFrame:
     logger.info("Normalizing event time")
     df = normalize_event_time(df)
 
+    logger.info("Validating timestamp")
+    validate_event_timestamp(df, 0.00, "timestamp_validation")
+
     logger.info("Building base event")
     base_df = build_base_event(df).cache()
 
-    logger.info("Aggregating metrics")
+    logger.info("Validating custom_track enum")
+    validate_custom_track_enum(
+        base_df,
+        allowed_values={
+            "click",
+            "conversion",
+            "qualified",
+            "unqualified",
+            "alive",
+            "interview_scheduled",
+        },
+        stage="custom_track_validation",
+    )
 
+    logger.info("Aggregating metrics")
     click = aggregate_function(base_df, "click")
     conversion = aggregate_function(base_df, "conversion")
     qualified = aggregate_function(base_df, "qualified")
     unqualified = aggregate_function(base_df, "unqualified")
+    alive = aggregate_function(base_df, "alive")
+    interview = aggregate_function(base_df, "interview_scheduled")
 
     logger.info("Merging metrics")
-    fact_df = merge_metrics(click, conversion, qualified, unqualified)
+    fact_df = merge_metrics(click, conversion, qualified, unqualified, alive, interview)
+    fact_df = fact_df.fillna(0, subset=METRIC_COLUMNS)
 
     logger.info("Enriching Job Dimension")
     fact_df = enrich_job_dimension(fact_df, jobs_df)
 
     logger.info("Adding metadata")
-    final = add_metadata(fact_df, base_df)
+    watermark = compute_event_watermark(base_df)
+    final = add_metadata(fact_df).withColumn("event_watermark", F.lit(watermark))
 
     return final
 
@@ -319,12 +497,18 @@ def control_flow():
     # read data from database
     logger.info("reading data from Cassandra")
     df = read_data("cassandra")
-    jobs = read_data("mysql")
+    schema_check(df, SCHEMA, "Cassandra_schema_check")
+
+    logger.info("reading data from MySQL")
+    job = read_data("mysql")
+    schema_check(
+        job, ("job_id", "company_id", "campaign_id", "group_id"), "MySQL_schema_check"
+    )
     df.show(10, truncate=False)
 
     # transfroming data
     logger.info("transforming data...")
-    final = transform_data(df, jobs)
+    final = transform_data(df, job)
     final.show(10, truncate=False)
 
     # writing data to database

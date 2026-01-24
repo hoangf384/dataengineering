@@ -40,8 +40,8 @@ logger = logging.getLogger(__name__)
 
 # spark config
 spark = (
-    SparkSession.builder.appName("Local-ETL-Test")
-    .master("spark://spark-master:7077")
+    SparkSession.builder.appName("Local-ETL-Test")  # type: ignore
+    .master("local[*]")
     .config("spark.driver.memory", "1g")
     .config(
         "spark.sql.files.maxPartitionBytes", 256 * 1024 * 1024
@@ -165,44 +165,45 @@ def schema_check(
         )
 
 
-def validate_custom_track_enum(
-    df: DataFrame,
-    allowed_values: Set[str],
-    stage: str = "custom_track_validation",
-) -> None:
+def clean_and_filter_custom_track(
+        df: DataFrame,
+        allowed_values: Set[str],
+        stage: str = "custom_track_filter",
+) -> DataFrame:
     """
-    Validate custom_track values.
-    Fail fast if any unexpected value is found.
+    Clean and filter custom_track column. Drop rows with invalid custom_track values.
 
-    Parameters
+    Parameter
     ----------
-    df: DataFrame
+    df : DataFrame
         Input DataFrame containing the 'custom_track' column.
-    allowed_values: Set[str]
+    allowed_values : Set[str]
         Set of allowed values for the 'custom_track' column.
-    stage: str
-        Name of the stage where validation is performed.
+    stage : str
+        Name of the satge where filtering is perormed.
 
-    Raises
-    ------
-    ValueError
-        if any unexpected values are found.
+    Returns
+    -------
+    DataFrame
+        DataFrame with only valid custom_track values.
     """
 
-    actual_values = {
-        row["custom_track"]
-        for row in df.select("custom_track").distinct().collect()
-        if row["custom_track"] is not None
-    }
+    is_valid = col("custom_track").isin(list(allowed_values))
 
-    unexpected = actual_values - allowed_values
+    total_count = df.count()
+    valid_df = df.filter(is_valid)
+    valid_count = valid_df.count()
+    invalid_count = total_count - valid_count
 
-    if unexpected:
-        raise ValueError(
-            f"[{stage}] Unexpected custom_track values found: "
-            f"{sorted(unexpected)}. "
-            f"Allowed values: {sorted(allowed_values)}"
+    if invalid_count > 0:
+        logger.warning(
+            f"[{stage}] Dropped {invalid_count} rows with invalid custom_track. "
+            f"Retaining {valid_count}/{total_count} rows."
         )
+
+    df = df.filter(is_valid)
+
+    return df
 
 
 def validate_event_timestamp(
@@ -368,8 +369,6 @@ def aggregate_metrics_single_pass(df: DataFrame) -> DataFrame:
         F.sum(F.when(is_conversion, 1).otherwise(0)).alias("conversion"),
         F.sum(F.when(is_qualified, 1).otherwise(0)).alias("qualified_application"),
         F.sum(F.when(is_unqualified, 1).otherwise(0)).alias("disqualified_application"),
-        # F.sum(F.when(is_alive, 1).otherwise(0)).alias("alives"),
-        # F.sum(F.when(is_interview, 1).otherwise(0)).alias("interview_scheduleds"),
     )
 
     return df
@@ -417,7 +416,7 @@ def add_metadata(df: DataFrame) -> DataFrame:
 
     """
     df = df.withColumn("processed_at", F.current_timestamp()).withColumn(
-        "source", F.lit("Cassandra")
+        "sources", F.lit("Cassandra")
     )
     return df
 
@@ -481,7 +480,7 @@ def transform_data(df: DataFrame, jobs_df: DataFrame) -> DataFrame:
     base_df = build_base_event(df).cache()
 
     logger.info("Validating custom_track enum")
-    validate_custom_track_enum(
+    clean_df = clean_and_filter_custom_track(
         base_df,
         allowed_values={
             "click",
@@ -489,7 +488,7 @@ def transform_data(df: DataFrame, jobs_df: DataFrame) -> DataFrame:
             "qualified",
             "unqualified",
         },
-        stage="custom_track_validation",
+        stage="custom_track_filter",
     )
 
     logger.info("Aggregating metrics")

@@ -1,0 +1,4 @@
+DROP USER IF EXISTS 'spark'@'%';
+CREATE USER 'spark'@'%' IDENTIFIED BY 'spark';
+GRANT ALL PRIVILEGES ON campaign.* TO 'spark'@'%';
+FLUSH PRIVILEGES;

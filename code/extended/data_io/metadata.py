@@ -15,7 +15,7 @@ def get_start_watermark(spark: SparkSession, pipeline_name: str = "tracking_etl"
     """
     query = f"""
     (SELECT MAX(max_event_time) as last_run 
-     FROM event_metadata 
+     FROM events_metadata 
      WHERE pipeline_name = '{pipeline_name}' 
      AND status = 'SUCCESS') as tmp
     """
@@ -66,7 +66,7 @@ def update_watermark(spark: SparkSession, pipeline_name: str, min_time: datetime
         (
             meta_df.write.format("jdbc")
             .option("url", MYSQL_URL)
-            .option("dbtable", "event_metadata")
+            .option("dbtable", "events_metadata")
             .option("driver", "com.mysql.cj.jdbc.Driver")
             .option("user", MYSQL_USER)
             .option("password", MYSQL_PASSWORD)

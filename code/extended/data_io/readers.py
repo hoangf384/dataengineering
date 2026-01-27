@@ -4,7 +4,7 @@ from logging import getLogger
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import col
 
-from config.settings import MYSQL_URL, MYSQL_USER, MYSQL_PASSWORD
+from config.settings import MYSQL_URL, MYSQL_USER, MYSQL_PASSWORD, CASSANDRA_KEYSPACE
 from core.utils import get_min_timeuuid_str
 
 logger = getLogger(__name__)
@@ -12,30 +12,19 @@ logger = getLogger(__name__)
 
 def read_tracking_incremental(spark: SparkSession, start_time: datetime) -> DataFrame:
     """
-        Read incremental Tracking table from Cassandra using predicate pushdown.
-
-    parameters
-    -----------
-    spark: SparkSession
-
-    start_time: datetime
-        time to filter create_time > start_time
-    Returns
-    -------
-        DataFrame: Filtered Tracking data.
+    Read incremental Tracking table from Cassandra.
     """
 
-    # 1. create min UUID (from core/utils.py)
-    min_uuid_str = get_min_timeuuid_str(start_time)
+    start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
 
-    logger.info(f"Predicate Pushdown: Reading create_time > {min_uuid_str}")
+    logger.info(f"Filtering data with ts > '{start_time_str}'")
 
-    # 2. read and filter data in cassandra source
+    # 2. Đọc và Lọc
     df = (
         spark.read.format("org.apache.spark.sql.cassandra")
-        .options(keyspace="recruitment", table="tracking")
+        .options(keyspace=CASSANDRA_KEYSPACE, table="tracking")
         .load()
-        .filter(col("create_time") > min_uuid_str)
+        .filter(col("ts") > start_time_str)
     )
 
     return df

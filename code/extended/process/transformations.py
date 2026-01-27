@@ -5,10 +5,10 @@ from datetime import datetime, timezone
 from typing import Optional, Tuple
 
 # pyspark module
-from pyspark.sql import udf, DataFrame
+from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, udf
 from pyspark.sql.types import StringType
 
 # local module

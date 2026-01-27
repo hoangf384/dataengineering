@@ -9,9 +9,9 @@ from pyspark.sql import SparkSession
 # config
 from config.spark import get_spark_session
 # io
-from io.readers import read_tracking_incremental, read_jobs_dimension
-from io.metadata import get_start_watermark, update_watermark
-from io.writers import write_data
+from data_io.readers import read_tracking_incremental, read_jobs_dimension
+from data_io.metadata import get_start_watermark, update_watermark
+from data_io.writers import write_data
 # process
 from process.transformations import transform_data
 
@@ -38,19 +38,19 @@ def control_flow(spark: SparkSession):
     raw_df = read_tracking_incremental(spark, start_time)
 
     if raw_df.rdd.isEmpty():
-        logger.info("No new data. Finished.")
+        logger.info(">>> No new data. Finished.")
         return
 
     jobs_df = read_jobs_dimension(spark)
 
     # 3. Transform
-    logger.info(">>> Transforming")
+    logger.info("Transforming")
     final_df, base_df = transform_data(raw_df, jobs_df)
     final_df.cache()
 
     row_count = final_df.count()
     if row_count == 0:
-        logger.info("0 rows after transform. Finished.")
+        logger.info(">>> 0 rows after transform. Finished.")
         return
 
     # Calculate Max Time

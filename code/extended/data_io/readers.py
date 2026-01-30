@@ -1,13 +1,13 @@
 import logging
 from datetime import datetime
-from logging import getLogger
+
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import col
 
 from config.settings import MYSQL_URL, MYSQL_USER, MYSQL_PASSWORD, CASSANDRA_KEYSPACE
 from core.utils import get_min_timeuuid_str
 
-logger = getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def read_tracking_incremental(spark: SparkSession, start_time: datetime) -> DataFrame:
@@ -15,7 +15,7 @@ def read_tracking_incremental(spark: SparkSession, start_time: datetime) -> Data
     Read incremental Tracking table from Cassandra.
     """
 
-    start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
+    start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
     logger.info(f"Filtering data with ts > '{start_time_str}'")
 

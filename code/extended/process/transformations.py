@@ -46,7 +46,7 @@ def timeuuid_to_ts(uuid_str: Optional[str]) -> Optional[str]:
             return None
 
         ts = (u.time - NUM_100NS_INTERVALS_SINCE_UUID_EPOCH) / 1e7
-        return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
     except ValueError as v:
         logger.error("Failed to parse timeuuid %s: %s", uuid_str, v)
@@ -74,6 +74,31 @@ def normalize_event_time(df: DataFrame) -> DataFrame:
     """
     df = df.withColumn("ts", timeuuid_to_ts(col("create_time")))
     return df
+
+
+def sanitize_timestamp_str(ts_str: Optional[str]) -> Optional[str]:
+    """
+    """
+    if not ts_str:
+        return None
+    if len(ts_str) > 23:
+        ts_str = ts_str[:23]
+
+    return ts_str.rstrip(".")
+
+
+def parse_timestamp(ts_str: Optional[str], default_value: datetime) -> datetime:
+    """
+    """
+    clean_str = sanitize_timestamp_str(ts_str)
+
+    if not clean_str:
+        return default_value
+
+    try:
+        return datetime.strptime(clean_str, "%Y-%m-%d %H:%M:%S.%f")
+    except ValueError:
+        return datetime.strptime(clean_str, "%Y-%m-%d %H:%M:%S")
 
 
 def build_base_event(df: DataFrame) -> DataFrame:

@@ -1,5 +1,6 @@
 # python module
 import logging
+from datetime import datetime
 
 # pyspark module
 from pyspark.sql import functions as F
@@ -13,7 +14,7 @@ from data_io.readers import read_tracking_incremental, read_jobs_dimension
 from data_io.metadata import get_start_watermark, update_watermark
 from data_io.writers import write_data
 # process
-from process.transformations import transform_data
+from process.transformations import transform_data, parse_timestamp
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -53,12 +54,15 @@ def control_flow(spark: SparkSession):
         logger.info(">>> 0 rows after transform. Finished.")
         return
 
-    # Calculate Max Time
-    stats = base_df.withColumn("ts_dt", F.to_timestamp("ts")) \
-        .agg(F.min("ts_dt"), F.max("ts_dt")).collect()[0]
-    batch_min, batch_max = stats[0], stats[1]
 
-    if not batch_max: batch_max = start_time
+    logger.info("Calculating batch statistics...")
+    stats = base_df.agg(F.min("ts"), F.max("ts")).collect()[0]
+
+    # 2. Parse Min/Max Timestamps
+    batch_min = parse_timestamp(stats[0], default_value=start_time)
+    batch_max = parse_timestamp(stats[1], default_value=start_time)
+
+    logger.info(f"Batch Time Range: {batch_min} -> {batch_max}")
 
     # 4. Write Data
     logger.info(f">>> Writing {row_count} rows")

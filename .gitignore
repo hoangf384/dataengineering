@@ -1,7 +1,15 @@
 # dot file
 .env
-docker/.cassandra/
+.idea/
+
+# python file
+__pycache__
 
 grafana/*
 
+
 logs/*
+
+# queries/*
+
+.gitignore

@@ -34,8 +34,8 @@ RUN chmod 644 $SPARK_HOME/jars/*.jar
 USER airflow
 
 # Python modules
+RUN pip install --no-cache-dir pyspark==3.5.1
 RUN pip install --no-cache-dir \
-    pyspark==3.5.1 \
     cassandra-driver \
     mysql-connector-python \
     polars

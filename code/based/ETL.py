@@ -13,12 +13,12 @@ from pyspark.sql.functions import col, udf
 from pyspark.sql.types import StringType
 
 # variables
-TAILSCALE_IP = os.getenv("TAILSCALE_IP")
+DATABASE_IP = os.getenv("DATABASE_IP")
 
 MYSQL_USER = os.getenv("MYSQL_USER")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
-URL = f"jdbc:mysql://{TAILSCALE_IP}:3306/{MYSQL_DATABASE}\
+URL = f"jdbc:mysql://{DATABASE_IP}:3306/{MYSQL_DATABASE}\
     ?allowPublicKeyRetrieval=true&useSSL=false"
 NUM_100NS_INTERVALS_SINCE_UUID_EPOCH = 0x01B21DD213814000
 # database variables
@@ -49,7 +49,7 @@ spark = (
     .config(
         "spark.sql.shuffle.partitions", "200"
     )  # 200 partitions for shuffle operations
-    .config("spark.cassandra.connection.host", TAILSCALE_IP)
+    .config("spark.cassandra.connection.host", DATABASE_IP)
     .config("spark.cassandra.connection.port", "9042")
     .getOrCreate()
 )

@@ -2,7 +2,7 @@
 import os
 
 # Env variables
-TAILSCALE_IP = os.getenv("TAILSCALE_IP")
+DATABASE_IP = os.getenv("DATABASE_IP")
 
 CASSANDRA_KEYSPACE = os.getenv("CASSANDRA_KEYSPACE")
 
@@ -10,7 +10,7 @@ MYSQL_USER = os.getenv("MYSQL_USER")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
 
-MYSQL_URL = f"jdbc:mysql://{TAILSCALE_IP}:3306/{MYSQL_DATABASE}?allowPublicKeyRetrieval=true&useSSL=false&rewriteBatchedStatements=true"
+MYSQL_URL = f"jdbc:mysql://{DATABASE_IP}:3306/{MYSQL_DATABASE}?allowPublicKeyRetrieval=true&useSSL=false&rewriteBatchedStatements=true"
 
 
 # Constants

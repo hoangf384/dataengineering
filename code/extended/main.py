@@ -54,7 +54,6 @@ def control_flow(spark: SparkSession):
         logger.info(">>> 0 rows after transform. Finished.")
         return
 
-
     logger.info("Calculating batch statistics...")
     stats = base_df.agg(F.min("ts"), F.max("ts")).collect()[0]
 

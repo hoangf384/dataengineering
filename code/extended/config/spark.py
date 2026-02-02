@@ -1,7 +1,7 @@
 # --- SPARK FACTORY ---
 from pyspark.sql import SparkSession
 
-from config.settings import TAILSCALE_IP
+from config.settings import DATABASE_IP
 
 
 def get_spark_session(app_name: str = "Hybrid-ETL-test") -> SparkSession:
@@ -21,10 +21,10 @@ def get_spark_session(app_name: str = "Hybrid-ETL-test") -> SparkSession:
         .config("spark.sql.shuffle.partitions", "200")
     )
 
-    if TAILSCALE_IP:
+    if DATABASE_IP:
         builder = (
             builder
-            .config("spark.cassandra.connection.host", TAILSCALE_IP)
+            .config("spark.cassandra.connection.host", DATABASE_IP)
             .config("spark.cassandra.connection.port", "9042")
         )
 

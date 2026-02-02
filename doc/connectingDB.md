@@ -73,7 +73,7 @@ df = (
      .format("jdbc")
      .option(
          "url",
-         "jdbc:mysql://<TAILSCALE_IP>:3306/mydb"
+         "jdbc:mysql://<DATABASE_IP>:3306/mydb"
          "?allowPublicKeyRetrieval=true"
          "&useSSL=false"
      )

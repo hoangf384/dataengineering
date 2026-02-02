@@ -13,7 +13,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # env variables
-ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 ENV SPARK_VERSION=3.5.1
 ENV HADOOP_VERSION=3
 

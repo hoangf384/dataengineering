@@ -3,8 +3,8 @@ FROM apache/airflow:2.8.1-python3.8
 USER root
 
 # Java 11 & Tools
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+RUN apt-get update || true \
+    && apt-get install -y --no-install-recommends --fix-missing \
     openjdk-11-jre-headless \
     procps \
     curl \

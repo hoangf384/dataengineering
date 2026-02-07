@@ -1,0 +1,158 @@
+services:
+  # --- Node 1 (Seed Node) ---
+  cassandra-seed:
+    image: cassandra:5.0.6-jammy
+    container_name: cassandra-seed
+    hostname: cassandra-seed
+    restart: unless-stopped
+
+    ports:
+      - "9042:9042" # Expose port cho Client kết nối vào
+
+    env_file:
+      - ~/dataengineering/.env
+
+    environment:
+      - CASSANDRA_CLUSTER_NAME=LearningCluster
+      - CASSANDRA_SEEDS=cassandra-seed
+
+      - CASSANDRA_DC=${CASSANDRA_DC}
+      - CASSANDRA_RACK=${CASSANDRA_RACK}
+
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+
+      - MAX_HEAP_SIZE=1024M
+      - HEAP_NEWSIZE=256M
+
+      - CASSANDRA_NUM_TOKENS=16
+
+    volumes:
+      - cassandra_seed_data:/var/lib/cassandra
+
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # --- Node 2 ---
+  cassandra-node-2:
+    image: cassandra:5.0.6-jammy
+    container_name: cassandra-node-2
+    hostname: cassandra-node-2
+    restart: unless-stopped
+
+    env_file:
+      - ~/dataengineering/.env
+
+    environment:
+      - CASSANDRA_CLUSTER_NAME=LearningCluster
+      - CASSANDRA_SEEDS=cassandra-seed
+
+      - CASSANDRA_DC=${CASSANDRA_DC}
+      - CASSANDRA_RACK=${CASSANDRA_RACK}
+
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      # TỐI ƯU RAM
+      - MAX_HEAP_SIZE=1024M
+      - HEAP_NEWSIZE=256M
+
+      - CASSANDRA_NUM_TOKENS=16
+
+    volumes:
+      - cassandra_node2_data:/var/lib/cassandra
+
+    depends_on:
+      cassandra-seed:
+        condition: service_healthy # Chỉ start khi node seed đã khỏe (tiết kiệm CPU)
+
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # --- Node 3 ---
+  cassandra-node-3:
+    image: cassandra:5.0.6-jammy
+    container_name: cassandra-node-3
+    hostname: cassandra-node-3
+    restart: unless-stopped
+
+    env_file:
+      - ~/dataengineering/.env
+
+    environment:
+      - CASSANDRA_CLUSTER_NAME=LearningCluster
+      - CASSANDRA_SEEDS=cassandra-seed
+
+      - CASSANDRA_DC=${CASSANDRA_DC}
+      - CASSANDRA_RACK=${CASSANDRA_RACK}
+
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+
+      - MAX_HEAP_SIZE=1024M
+      - HEAP_NEWSIZE=256M
+
+      - CASSANDRA_NUM_TOKENS=16
+
+    volumes:
+      - cassandra_node3_data:/var/lib/cassandra
+
+    depends_on:
+      cassandra-node-2:
+        condition: service_started
+
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # --- MySQL ---
+  mysql:
+    image: mysql:lts
+    container_name: mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    env_file:
+      - ~/dataengineering/.env
+    command:
+      [
+        "--character-set-server=utf8mb4",
+        "--collation-server=utf8mb4_unicode_ci",
+        "--max_connections=200",
+        "--innodb_buffer_pool_size=512M",
+      ]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: ${TZ}
+    volumes:
+      - db-volume:/var/lib/mysql
+
+      - ~/dataengineering/db/init:/docker-entrypoint-initdb.d:Z
+      - ~/dataengineering/db/conf.d:/etc/mysql/conf.d:Z
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+volumes:
+  db-volume:
+  cassandra_seed_data:
+  cassandra_node2_data:
+  cassandra_node3_data:

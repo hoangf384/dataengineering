@@ -1,0 +1,33 @@
+services:
+  spark-node:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: spark-extended:3.5.1
+
+    container_name: spark-node
+
+    command: tail -f /dev/null
+
+    env_file:
+      - ~/dataengineering/.env
+
+    environment:
+      SPARK_MODE: local
+      SPARK_DRIVER_MEMORY: 4G
+      SPARK_EVENTLOG_ENABLED: true
+      SPARK_EVENTLOG_DIR: /opt/spark/logs
+      TZ: ${TZ}
+
+    volumes:
+      - ~/dataengineering/data:/data:z
+      - ~/dataengineering/code:/code:z
+
+    ports:
+      - "4040:4040"
+
+    deploy:
+      resources:
+        limits:
+          memory: 6G

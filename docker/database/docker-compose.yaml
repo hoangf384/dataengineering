@@ -34,6 +34,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 10
+      start_period: 60s
 
     deploy:
       resources:
@@ -66,6 +67,13 @@ services:
 
     volumes:
       - cassandra_node2_data:/var/lib/cassandra
+
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
     depends_on:
       cassandra-seed:
@@ -103,6 +111,13 @@ services:
     volumes:
       - cassandra_node3_data:/var/lib/cassandra
 
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
     depends_on:
       cassandra-node-2:
         condition: service_started
@@ -119,8 +134,10 @@ services:
     restart: unless-stopped
     ports:
       - "3306:3306"
+
     env_file:
       - ~/dataengineering/.env
+
     command:
       [
         "--character-set-server=utf8mb4",
@@ -128,6 +145,7 @@ services:
         "--max_connections=200",
         "--innodb_buffer_pool_size=512M",
       ]
+
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}

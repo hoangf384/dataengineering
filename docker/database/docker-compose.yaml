@@ -132,7 +132,7 @@ services:
 
     depends_on:
       cassandra-node-2:
-        condition: service_started
+        condition: service_healthy
 
     deploy:
       resources:

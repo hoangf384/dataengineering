@@ -19,6 +19,10 @@ services:
       - CASSANDRA_DC=${CASSANDRA_DC}
       - CASSANDRA_RACK=${CASSANDRA_RACK}
 
+      - CASSANDRA_LISTEN_ADDRESS=auto
+      - CASSANDRA_BROADCAST_ADDRESS=auto
+      - CASSANDRA_RPC_ADDRESS=0.0.0.0
+
       - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
 
       - MAX_HEAP_SIZE=1024M
@@ -57,6 +61,10 @@ services:
 
       - CASSANDRA_DC=${CASSANDRA_DC}
       - CASSANDRA_RACK=${CASSANDRA_RACK}
+
+      - CASSANDRA_LISTEN_ADDRESS=auto
+      - CASSANDRA_BROADCAST_ADDRESS=auto
+      - CASSANDRA_RPC_ADDRESS=0.0.0.0
 
       - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
       # TỐI ƯU RAM
@@ -97,6 +105,10 @@ services:
     environment:
       - CASSANDRA_CLUSTER_NAME=LearningCluster
       - CASSANDRA_SEEDS=cassandra-seed
+
+      - CASSANDRA_LISTEN_ADDRESS=auto
+      - CASSANDRA_BROADCAST_ADDRESS=auto
+      - CASSANDRA_RPC_ADDRESS=0.0.0.0
 
       - CASSANDRA_DC=${CASSANDRA_DC}
       - CASSANDRA_RACK=${CASSANDRA_RACK}

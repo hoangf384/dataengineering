@@ -8,6 +8,8 @@ services:
 
     container_name: spark-node
 
+    restart: unless-stopped
+
     command: tail -f /dev/null
 
     env_file:

@@ -1,5 +1,8 @@
 x-airflow-common: &airflow-common
-  build: .
+  image: custom-airflow:2.8.1-python3.8
+  build:
+    context: .
+    dockerfile: Dockerfile
 
   env_file:
     - .env
@@ -8,22 +11,19 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
-
-    # Cấu hình User và Timezone
-    AIRFLOW_UID: 50000
+    AIRFLOW_UID: ${AIRFLOW_UID:-50000}
     TZ: ${TZ}
-
-    # Biến môi trường cho Code (để import module)
+    # PYTHONPATH trỏ vào nơi chứa code để import module
     PYTHONPATH: /opt/project
 
   volumes:
+    # QUAN TRỌNG VỚI FEDORA/SELINUX: Thêm đuôi :z vào tất cả các dòng
     - ~/dataengineering/dags:/opt/airflow/dags:z
-    - ./logs:/opt/airflow/logs
-    - ./config:/opt/airflow/config
-    - ./plugins:/opt/airflow/plugins
+    - ./logs:/opt/airflow/logs:z
+    - ./config:/opt/airflow/config:z
+    - ./plugins:/opt/airflow/plugins:z
     - ~/dataengineering/code:/opt/project/code:z
 
   user: "${AIRFLOW_UID:-50000}:0"
@@ -32,7 +32,6 @@ x-airflow-common: &airflow-common
       condition: service_healthy
 
 services:
-  # 1. Metadata Database
   postgres:
     image: postgres:13
     environment:
@@ -47,7 +46,6 @@ services:
       retries: 5
     restart: always
 
-  # 2. Airflow Webserver (UI)
   airflow-webserver:
     <<: *airflow-common
     command: webserver
@@ -64,7 +62,6 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
-  # 3. Airflow Scheduler
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
@@ -82,12 +79,16 @@ services:
   airflow-init:
     <<: *airflow-common
     entrypoint: /bin/bash
+
+    user: "0:0"
+
     command:
       - -c
       - |
-        mkdir -p /sources/logs /sources/dags /sources/plugins
-        chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
+        mkdir -p /opt/airflow/logs /opt/airflow/dags /opt/airflow/plugins
+        chown -R "50000:0" /opt/airflow/{logs,dags,plugins}
         exec /entrypoint airflow version
+
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: "true"

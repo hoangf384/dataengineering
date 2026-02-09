@@ -154,7 +154,7 @@ if __name__ == "__main__":
 
     logger.info("STARTING GENERATOR")
 
-    n = random.randint(1, 2)
+    n = random.randint(10, 100)
     generate_and_write_batch(spark, n, jobs_data, pubs_data)
 
     logger.info("GENERATION FINISHED")

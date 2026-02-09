@@ -1,6 +1,5 @@
 # python module
 import logging
-from datetime import datetime
 
 # pyspark module
 from pyspark.sql import functions as F

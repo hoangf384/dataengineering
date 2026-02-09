@@ -16,16 +16,14 @@ def get_spark_session(app_name: str = "Hybrid-ETL-test") -> SparkSession:
     builder = (
         SparkSession.builder.appName(app_name)
         .master("local[*]")
-        .config("spark.driver.memory", "1g")
+        .config("spark.driver.memory", "4g")
         .config("spark.sql.files.maxPartitionBytes", 256 * 1024 * 1024)
         .config("spark.sql.shuffle.partitions", "200")
     )
 
     if DATABASE_IP:
-        builder = (
-            builder
-            .config("spark.cassandra.connection.host", DATABASE_IP)
-            .config("spark.cassandra.connection.port", "9042")
+        builder = builder.config("spark.cassandra.connection.host", DATABASE_IP).config(
+            "spark.cassandra.connection.port", "9042"
         )
 
     spark = builder.getOrCreate()

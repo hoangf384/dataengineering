@@ -5,7 +5,6 @@ from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import col
 
 from config.settings import MYSQL_URL, MYSQL_USER, MYSQL_PASSWORD, CASSANDRA_KEYSPACE
-from core.utils import get_min_timeuuid_str
 
 logger = logging.getLogger(__name__)
 

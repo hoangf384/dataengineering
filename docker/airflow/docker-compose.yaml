@@ -2,7 +2,7 @@ x-airflow-common: &airflow-common
   build: .
 
   env_file:
-    - ../../../.env
+    - .env
 
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -20,11 +20,11 @@ x-airflow-common: &airflow-common
     PYTHONPATH: /opt/project
 
   volumes:
-    - ./dags:/opt/airflow/dags
+    - ~/dataengineering/dags:/opt/airflow/dags:z
     - ./logs:/opt/airflow/logs
     - ./config:/opt/airflow/config
     - ./plugins:/opt/airflow/plugins
-    - ../../../code:/opt/project/code
+    - ~/dataengineering/code:/opt/project/code:z
 
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on: &airflow-common-depends-on

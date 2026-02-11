@@ -22,7 +22,6 @@ with DAG(
         application="/opt/project/code/hello_spark.py",  # Đường dẫn tới file script (lưu ý đường dẫn trong container)
         verbose=True,
         conf={
-            "spark.master": "local[*]",  # Chạy mode local
             "spark.driver.memory": "512m",  # Quan trọng: Giới hạn RAM vì máy EC2 của bạn yếu
         },
     )

@@ -19,7 +19,7 @@ with DAG(
     submit_job = SparkSubmitOperator(
         task_id="submit_spark_job",
         conn_id="spark_default",  # Trỏ vào connection đã tạo ở Bước 2
-        application="/opt/project/code/hello_spark.py",  # Đường dẫn tới file script (lưu ý đường dẫn trong container)
+        application="/opt/project/code/test/hello_spark.py",  # Đường dẫn tới file script (lưu ý đường dẫn trong container)
         verbose=True,
         conf={
             "spark.driver.memory": "512m",  # Quan trọng: Giới hạn RAM vì máy EC2 của bạn yếu

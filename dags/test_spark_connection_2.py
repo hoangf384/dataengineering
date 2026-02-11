@@ -1,8 +1,13 @@
 # dags/test_spark_dag.py
 from datetime import datetime
+from os import getenv
 
 from airflow import DAG
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
+
+# env
+SPARK_IP = getenv("SPARK_IP")
+AIRFLOW_IP = getenv("AIRFLOW_IP")
 
 default_args = {
     "owner": "airflow",
@@ -15,15 +20,24 @@ with DAG(
     schedule_interval=None,
     catchup=False,
 ) as dag:
-    # Task submit job Spark
     submit_job = SparkSubmitOperator(
         task_id="submit_spark_job",
-        conn_id="spark_default",  # Trỏ vào connection đã tạo ở Bước 2
-        application="/opt/project/code/test/hello_spark.py",  # Đường dẫn tới file script (lưu ý đường dẫn trong container)
+        conn_id=None,
+        application="/opt/project/code/test/hello_spark.py",
         verbose=True,
         conf={
-            "spark.driver.memory": "512m",  # Quan trọng: Giới hạn RAM vì máy EC2 của bạn yếu
+            "spark.master": f"spark://{SPARK_IP}:7077",
+            "spark.submit.deployMode": "client",
+            
+            "spark.driver.port": "30000",
+            "spark.blockManager.port": "30001",
+            "spark.driver.bindAddress": "0.0.0.0",
+            
+            "spark.driver.host": AIRFLOW_IP,
+            
+            "spark.driver.memory": "512m",
+            "spark.executor.memory": "512m",
+            "spark.executor.cores": "1",
         },
     )
-
     submit_job

@@ -7,7 +7,7 @@ from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOpe
 
 # env
 SPARK_IP = getenv("SPARK_IP")
-AIRFLOW_IP = getenv("AIRFLOW_IP")
+AIRFLOW_TAILNET = getenv("AIRFLOW_TAILNET")
 
 default_args = {
     "owner": "airflow",
@@ -15,26 +15,18 @@ default_args = {
 }
 
 with DAG(
-    dag_id="test_spark_connection",
+    dag_id="spark_airflow_connection_cluster",
     default_args=default_args,
     schedule_interval=None,
     catchup=False,
 ) as dag:
     submit_job = SparkSubmitOperator(
         task_id="submit_spark_job",
-        conn_id=None,
+        conn_id="spark_default",
         application="/opt/project/code/test/hello_spark.py",
         verbose=True,
         conf={
-            "spark.master": f"spark://{SPARK_IP}:7077",
-            "spark.submit.deployMode": "client",
-            
-            "spark.driver.port": "30000",
-            "spark.blockManager.port": "30001",
-            "spark.driver.bindAddress": "0.0.0.0",
-            
-            "spark.driver.host": AIRFLOW_IP,
-            
+            "spark.submit.deployMode": "cluster",
             "spark.driver.memory": "512m",
             "spark.executor.memory": "512m",
             "spark.executor.cores": "1",

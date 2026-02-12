@@ -1,15 +1,14 @@
-# dot file
+# ------- dot file --------
 .env
 .idea/
 
-# python file
+# ------- python file ----------
 __pycache__
+# docker/spark/spark-defaults.conf
 
-grafana/*
-
-
+# ------- logging ---------
 logs/*
+*/logs/*
 
-# queries/*
-
-.gitignore
+# ------- so thich ---------
+grafana/*

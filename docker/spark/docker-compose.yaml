@@ -99,16 +99,18 @@ services:
             SPARK_DAEMON_MEMORY: 512m
 
             TZ: ${TZ}
-
+            # Cập nhật dùng s3a:// và bỏ endpoint vào đây nếu cần thiết
             SPARK_HISTORY_OPTS: >
                 -Dspark.history.ui.port=18080
-                -Dspark.history.fs.logDirectory=file:/opt/spark-events
+                -Dspark.history.fs.logDirectory=s3a://spark-log-proj/spark-events/
                 -Dspark.history.fs.cleaner.enabled=true
                 -Dspark.history.fs.cleaner.maxAge=7d
                 -Dspark.history.fs.cleaner.interval=1h
+                -Dspark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
+                -Dspark.hadoop.fs.s3a.aws.credentials.provider=com.amazonaws.auth.InstanceProfileCredentialsProvider
+                -Dspark.hadoop.fs.s3a.endpoint=s3.ap-southeast-2.amazonaws.com
 
         volumes:
-            - ./spark-events:/opt/spark-events:z
             - ./spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:z
 
         ports:

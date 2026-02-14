@@ -26,7 +26,6 @@ with DAG(
         application="/opt/project/code/test/hello_spark.py",
         verbose=True,
         conf={
-            # "spark.master": f"spark://{SPARK_IP}:7077",
             "spark.submit.deployMode": "client",
             "spark.driver.port": "30000",
             "spark.blockManager.port": "30001",
@@ -35,6 +34,8 @@ with DAG(
             "spark.driver.memory": "512m",
             "spark.executor.memory": "512m",
             "spark.executor.cores": "1",
-        },
+            # "spark.eventLog.enabled": "true",
+            # "spark.eventLog.dir": "file:/opt/airflow/spark-events",
+        }
     )
     submit_job

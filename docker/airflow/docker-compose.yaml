@@ -15,9 +15,13 @@ x-airflow-common: &airflow-common
         AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
         AIRFLOW_UID: ${AIRFLOW_UID}
         TZ: ${TZ}
-        # PYTHONPATH trỏ vào nơi chứa code để import module
-        PYTHONPATH: /opt/project
 
+        PYTHONPATH: /opt/project
+        
+        # --- LOGGING CỦA AIRFLOW (Text Log) ---
+        AIRFLOW__LOGGING__REMOTE_LOGGING: 'true'
+        AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: 's3://spark-log-proj/airflow-logs'
+        AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: 'aws_default'
     volumes:
         # QUAN TRỌNG VỚI FEDORA/SELINUX: Thêm đuôi :z vào tất cả các dòng
         - ~/dataengineering/dags:/opt/airflow/dags:z
@@ -25,6 +29,7 @@ x-airflow-common: &airflow-common
         - ./config:/opt/airflow/config:z
         - ./plugins:/opt/airflow/plugins:z
         - ~/dataengineering/code:/opt/project/code:z
+        - ../spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:z
 
     user: "${AIRFLOW_UID}:0"
     depends_on: &airflow-common-depends-on

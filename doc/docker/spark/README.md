@@ -1,4 +1,4 @@
-# Spark Cluster (Standalone) – Docker
+# Spark Cluster (Standalone) 
 
 Thư mục này dùng để triển khai **Apache Spark Standalone Cluster** bằng Docker Compose.
 

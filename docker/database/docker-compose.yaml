@@ -6,6 +6,8 @@ services:
     hostname: cassandra-seed
     restart: unless-stopped
 
+    mem_limit: 2G
+
     ports:
       - "9042:9042" # Expose port cho Client kết nối vào
 
@@ -13,7 +15,7 @@ services:
       - ~/dataengineering/.env
 
     environment:
-      - CASSANDRA_CLUSTER_NAME=LearningCluster
+      - CASSANDRA_CLUSTER_NAME=${CASSANDRA_CLUSTER_NAME}
       - CASSANDRA_SEEDS=cassandra-seed
 
       - CASSANDRA_DC=${CASSANDRA_DC}
@@ -40,11 +42,6 @@ services:
       retries: 10
       start_period: 60s
 
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-
   # --- Node 2 ---
   cassandra-node-2:
     image: cassandra:5.0.6-jammy
@@ -52,11 +49,13 @@ services:
     hostname: cassandra-node-2
     restart: unless-stopped
 
+    mem_limit: 2G
+
     env_file:
       - ~/dataengineering/.env
 
     environment:
-      - CASSANDRA_CLUSTER_NAME=LearningCluster
+      - CASSANDRA_CLUSTER_NAME=${CASSANDRA_CLUSTER_NAME}
       - CASSANDRA_SEEDS=cassandra-seed
 
       - CASSANDRA_DC=${CASSANDRA_DC}
@@ -87,11 +86,6 @@ services:
       cassandra-seed:
         condition: service_healthy # Chỉ start khi node seed đã khỏe (tiết kiệm CPU)
 
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-
   # --- Node 3 ---
   cassandra-node-3:
     image: cassandra:5.0.6-jammy
@@ -99,11 +93,13 @@ services:
     hostname: cassandra-node-3
     restart: unless-stopped
 
+    mem_limit: 2G
+
     env_file:
       - ~/dataengineering/.env
 
     environment:
-      - CASSANDRA_CLUSTER_NAME=LearningCluster
+      - CASSANDRA_CLUSTER_NAME=${CASSANDRA_CLUSTER_NAME}
       - CASSANDRA_SEEDS=cassandra-seed
 
       - CASSANDRA_LISTEN_ADDRESS=auto
@@ -134,11 +130,6 @@ services:
       cassandra-node-2:
         condition: service_healthy
 
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-
   # --- MySQL ---
   mysql:
     image: mysql:lts
@@ -146,6 +137,8 @@ services:
     restart: unless-stopped
     ports:
       - "3306:3306"
+
+    mem_limit: 1G
 
     env_file:
       - ~/dataengineering/.env
@@ -175,11 +168,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-    deploy:
-      resources:
-        limits:
-          memory: 1G
 
 volumes:
   db-volume:

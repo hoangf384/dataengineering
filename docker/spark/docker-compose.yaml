@@ -1,123 +1,115 @@
 services:
-    spark-master:
-        build:
-            context: .
-            dockerfile: Dockerfile
-        image: spark-extended:3.5.1
-        container_name: spark-master
-        restart: unless-stopped
+  spark-master:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: spark-extended:3.5.1
+    container_name: spark-master
+    restart: unless-stopped
 
-        command: >
-            /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
-            --ip 0.0.0.0
-            --port 7077
-            --webui-port 8080
+    cpus: 0.5
+    mem_limit: 1G
 
-        env_file:
-            - .env
+    command: >
+      /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+      --ip 0.0.0.0
+      --port 7077
+      --webui-port 8080
 
-        environment:
-            SPARK_LOCAL_IP: 0.0.0.0
-            SPARK_MASTER_WEBUI_PORT: 8080
+    env_file:
+      - .env
 
-            SPARK_DAEMON_MEMORY: 512m
-            TZ: ${TZ}
+    environment:
+      SPARK_LOCAL_IP: 0.0.0.0
+      SPARK_MASTER_WEBUI_PORT: 8080
 
-        volumes:
-            - ~/dataengineering/data:/data:z
-            - ~/dataengineering/code:/code:z
+      SPARK_DAEMON_MEMORY: 512m
+      TZ: ${TZ}
 
-            - ./spark-events:/opt/spark-events:z
-            - ./spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:z
-        ports:
-            - "8080:8080"
-            - "7077:7077"
+    volumes:
+      - ~/dataengineering/data:/data:z
+      - ~/dataengineering/code:/code:z
 
-        deploy:
-            resources:
-                limits:
-                    cpus: "0.5"
-                    memory: 1G
+      - ./spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:z
+    ports:
+      - "8080:8080"
+      - "7077:7077"
 
-    spark-worker:
-        image: spark-extended:3.5.1
-        container_name: spark-worker
-        restart: unless-stopped
-        depends_on:
-            - spark-master
 
-        command: >
-            /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker
-            spark://spark-master:7077
+  spark-worker:
+    image: spark-extended:3.5.1
+    container_name: spark-worker
+    restart: unless-stopped
 
-        env_file:
-            - .env
+    cpus: 1.5
+    mem_limit: 5.5G
 
-        environment:
-            SPARK_WORKER_WEBUI_PORT: 8081
+    depends_on:
+      - spark-master
 
-            SPARK_LOCAL_IP: 0.0.0.0
-            SPARK_WORKER_CORES: 1
+    command: >
+      /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker
+      spark://spark-master:7077
 
-            SPARK_WORKER_MEMORY: 4g
-            SPARK_DAEMON_MEMORY: 512m
+    env_file:
+      - .env
 
-            TZ: ${TZ}
+    environment:
+      SPARK_WORKER_WEBUI_PORT: 8081
 
-        volumes:
-            - ~/dataengineering/data:/data:z
-            - ~/dataengineering/code:/code:z
+      SPARK_LOCAL_IP: 0.0.0.0
+      SPARK_WORKER_CORES: 1
 
-            - ./spark-events:/opt/spark-events:z
-            - ./spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:z
+      SPARK_WORKER_MEMORY: 4g
+      SPARK_DAEMON_MEMORY: 512m
 
-        ports:
-            - "8081:8081"
+      TZ: ${TZ}
 
-        deploy:
-            resources:
-                limits:
-                    cpus: "1.5"
-                    memory: 5.5G
+    volumes:
+      - ~/dataengineering/data:/data:z
+      - ~/dataengineering/code:/code:z
 
-    spark-history-server:
-        image: spark-extended:3.5.1
-        container_name: spark-history-server
-        restart: unless-stopped
+      - ./spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:z
 
-        depends_on:
-            - spark-master
+    ports:
+      - "8081:8081"
 
-        command: >
-            /opt/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer
 
-        env_file:
-            - .env
+  spark-history-server:
+    image: spark-extended:3.5.1
+    container_name: spark-history-server
+    restart: unless-stopped
 
-        environment:
-            SPARK_LOCAL_IP: 0.0.0.0
-            SPARK_DAEMON_MEMORY: 512m
+    cpus: "0.5"
+    mem_limit: 1G
 
-            TZ: ${TZ}
-            # Cập nhật dùng s3a:// và bỏ endpoint vào đây nếu cần thiết
-            SPARK_HISTORY_OPTS: >
-                -Dspark.history.ui.port=18080
-                -Dspark.history.fs.logDirectory=s3a://spark-log-proj/spark-events/
-                -Dspark.history.fs.cleaner.enabled=true
-                -Dspark.history.fs.cleaner.maxAge=7d
-                -Dspark.history.fs.cleaner.interval=1h
-                -Dspark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
-                -Dspark.hadoop.fs.s3a.aws.credentials.provider=com.amazonaws.auth.InstanceProfileCredentialsProvider
-                -Dspark.hadoop.fs.s3a.endpoint=s3.ap-southeast-2.amazonaws.com
+    depends_on:
+      - spark-master
 
-        volumes:
-            - ./spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:z
+    command: >
+      /opt/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer
 
-        ports:
-            - "18080:18080"
+    env_file:
+      - .env
 
-        deploy:
-            resources:
-                limits:
-                    cpus: "0.5"
-                    memory: 1G
+    environment:
+      SPARK_LOCAL_IP: 0.0.0.0
+      SPARK_DAEMON_MEMORY: 512m
+
+      TZ: ${TZ}
+      # Cập nhật dùng s3a:// và bỏ endpoint vào đây nếu cần thiết
+      SPARK_HISTORY_OPTS: >
+        -Dspark.history.ui.port=18080
+        -Dspark.history.fs.logDirectory=s3a://spark-log-proj/spark-events/
+        -Dspark.history.fs.cleaner.enabled=true
+        -Dspark.history.fs.cleaner.maxAge=7d
+        -Dspark.history.fs.cleaner.interval=1h
+        -Dspark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
+        -Dspark.hadoop.fs.s3a.aws.credentials.provider=com.amazonaws.auth.InstanceProfileCredentialsProvider
+        -Dspark.hadoop.fs.s3a.endpoint=s3.ap-southeast-2.amazonaws.com
+
+    volumes:
+      - ./spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:z
+
+    ports:
+      - "18080:18080"

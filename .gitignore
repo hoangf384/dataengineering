@@ -1,14 +1,15 @@
-# ------- dot file --------
+# ------- Environment --------
 .env
+# ------- IDE --------
 .idea/
+.vscode/
 
-# ------- python file ----------
-__pycache__
-# docker/spark/spark-defaults.conf
+# ------- Python --------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
-# ------- logging ---------
-logs/*
-*/logs/*
-
-# ------- so thich ---------
-grafana/*
+# ------- Logs --------
+logs/
+*/logs/

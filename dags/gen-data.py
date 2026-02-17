@@ -5,7 +5,6 @@ from os import getenv
 from airflow import DAG
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 
-
 AIRLOW_IP = getenv("AIRLOW_IP")
 DATABASE_IP = getenv("DATABASE_IP")
 MYSQL_USER = getenv("MYSQL_USER")
@@ -27,7 +26,7 @@ default_args = {
 with DAG(
     dag_id="gen-dummy-data",
     default_args=default_args,
-    schedule_interval="@hourly",
+    schedule_interval="*/5 * * * *",
     catchup=False,
 ) as dag:
     submit_job = SparkSubmitOperator(

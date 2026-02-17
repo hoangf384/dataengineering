@@ -17,11 +17,11 @@ x-airflow-common: &airflow-common
         TZ: ${TZ}
 
         PYTHONPATH: /opt/project
-        
+
         # --- LOGGING CỦA AIRFLOW (Text Log) ---
-        AIRFLOW__LOGGING__REMOTE_LOGGING: 'true'
-        AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: 's3://spark-log-proj/airflow-logs'
-        AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: 'aws_default'
+        AIRFLOW__LOGGING__REMOTE_LOGGING: "true"
+        AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER: "s3://spark-log-proj/airflow-logs"
+        AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID: "aws_default"
     volumes:
         # QUAN TRỌNG VỚI FEDORA/SELINUX: Thêm đuôi :z vào tất cả các dòng
         - ~/dataengineering/dags:/opt/airflow/dags:z
@@ -94,7 +94,7 @@ services:
             - -c
             - |
                 mkdir -p /opt/airflow/logs /opt/airflow/dags /opt/airflow/plugins
-                chown -R "50000:0" /opt/airflow/{logs,dags,plugins}
+                chown -R "1000:0" /opt/airflow/{logs,dags,plugins}
                 exec /entrypoint airflow version
 
         environment:

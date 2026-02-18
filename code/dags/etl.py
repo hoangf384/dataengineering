@@ -33,7 +33,7 @@ with DAG(
     submit_job = SparkSubmitOperator(
         task_id="submit_spark_job",
         conn_id="spark_default",
-        application=f"{PROJECT_ROOT}/extended/main.py",
+        application=f"{PROJECT_ROOT}/pipeline/main.py",
         verbose=True,
         conf={
             "spark.submit.deployMode": "client",

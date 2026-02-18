@@ -32,7 +32,7 @@ with DAG(
     submit_job = SparkSubmitOperator(
         task_id="submit_dummy_data_generator_job",
         conn_id="spark_default",
-        application=f"{PROJECT_ROOT}/test/dummy-gennerator.py",
+        application=f"{PROJECT_ROOT}/scripts/dummy-gennerator.py",
         verbose=True,
         conf={
             "spark.submit.deployMode": "client",

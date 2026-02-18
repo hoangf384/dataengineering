@@ -70,6 +70,16 @@ Những kiến thức quan trọng nhất rút ra từ dự án, xếp theo mứ
 
 ## 2. Kiến Trúc Tổng Quan
 ![Architecture Overview](images/final-uml-flow-chart.drawio.png)
+
+### Hạ Tầng AWS
+
+**3 EC2 instances đang chạy tại ap-southeast-2 (Sydney):**
+
+![EC2 Instances](images/aws/EC2-instances.png)
+
+**S3 bucket `spark-log-proj` lưu tập trung logs từ Spark và Airflow:**
+
+![S3 Logs](images/aws/s3-logs-directory.png)
 ### Các Thành Phần Chính
 
 > **Lưu ý về ports:** Spark UI (8080) và Airflow UI (8080) đều dùng cùng port nhưng chạy trên **các EC2 instances riêng biệt**, không conflict với nhau.
@@ -224,6 +234,16 @@ Theo dõi tiến độ ETL để hỗ trợ incremental load.
 | `row_count` | INT | Số records đã xử lý |
 | `status` | VARCHAR(20) | `SUCCESS` / `FAILED` |
 | `created_at` | TIMESTAMP | Thời điểm ghi metadata |
+
+### Kết Quả Thực Tế
+
+**Bảng `events` — dữ liệu aggregate sau ETL:**
+
+![MySQL Events Table](images/database/showcase-mysql.png)
+
+**Bảng `events_metadata` — lịch sử các lần ETL chạy (incremental watermark):**
+
+![MySQL Metadata Table](images/database/showcase-mysql-metadata.png)
 
 ## 5. Chi Tiết Luồng ETL
 
@@ -435,6 +455,14 @@ pip install -r requirements.txt
 3. Trigger DAG manually hoặc đợi schedule (`@hourly`)
 4. Theo dõi logs và task execution
 
+**2 DAGs đang active — Running 0, Failed 0:**
+
+![Airflow DAGs Dashboard](images/airflow/dags/airflow-dags-dashboard.png)
+
+**ETL job log — toàn bộ pipeline chạy thành công, ghi 68,372 rows vào MySQL:**
+
+![ETL Job Logs](images/airflow/logs/ETL-job-logs.png)
+
 **Kết quả mong đợi sau khi ETL chạy thành công:**
 - Bảng `events` trong MySQL có thêm records mới với `processed_at` được set
 - Bảng `events_metadata` có thêm 1 row với `status = 'SUCCESS'` và `max_event_time` được cập nhật
@@ -450,6 +478,10 @@ spark-submit \
   --conf spark.cassandra.connection.host=localhost \
   code/test/dummy-gennerator.py
 ```
+
+**Log khi gen-dummy-data chạy thành công — load 1,868 jobs, 20 publishers, ghi 54 records vào Cassandra:**
+
+![Gen Dummy Data Logs](images/airflow/logs/gen-dummy-data-logs.png)
 
 ### Chạy ETL Local (Development)
 
@@ -474,6 +506,14 @@ spark-submit \
 - Spark Worker UI: `http://<spark-ec2-ip>:8081`
 - Spark History Server: `http://<spark-ec2-ip>:18080`
 - Logs được lưu vào S3: `s3://spark-log-proj/spark-events/`
+
+**Spark History Server — lịch sử tất cả các jobs (logs lưu trên S3):**
+
+![Spark History Server](images/spark/spark-event-logs.png)
+
+**ETL job `Hybrid-ETL-tracking` — 26 completed jobs, tổng uptime ~1 phút:**
+
+![ETL Spark Jobs](images/spark/ETL/ETL-event-logs-jobs.png)
 
 ### Airflow
 

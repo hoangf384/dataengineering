@@ -121,48 +121,51 @@ Những kiến thức quan trọng nhất rút ra từ dự án, xếp theo mứ
 ```
 dataengineering/
 ├── code/
-│   ├── extended/                 # Module ETL chính
-│   │   ├── config/              # Cấu hình Spark và kết nối
-│   │   │   ├── settings.py      # Biến môi trường và constants
-│   │   │   └── spark.py         # Factory để tạo SparkSession
-│   │   ├── data_io/             # Đọc/ghi dữ liệu
-│   │   │   ├── readers.py       # Đọc từ Cassandra và MySQL
-│   │   │   ├── writers.py       # Ghi vào MySQL
-│   │   │   └── metadata.py      # Quản lý watermark
-│   │   ├── process/             # Xử lý và chuyển đổi dữ liệu
-│   │   │   ├── transformations.py  # Logic transform chính
-│   │   │   └── validations.py   # Validation và data quality
-│   │   └── main.py              # Entry point của ETL job
-│   └── test/
-│       └── dummy-gennerator.py  # Tạo dữ liệu test
-├── dags/
-│   ├── etl.py                   # DAG ETL chính
-│   └── gen-data.py              # DAG tạo dữ liệu test
+│   ├── pipeline/                       # Module ETL chính
+│   │   ├── config/                     # Cấu hình Spark và kết nối
+│   │   │   ├── settings.py             # Biến môi trường và constants
+│   │   │   └── spark.py                # Factory để tạo SparkSession
+│   │   ├── data_io/                    # Đọc/ghi dữ liệu
+│   │   │   ├── readers.py              # Đọc từ Cassandra và MySQL
+│   │   │   ├── writers.py              # Ghi vào MySQL
+│   │   │   └── metadata.py             # Quản lý watermark
+│   │   ├── process/                    # Xử lý và chuyển đổi dữ liệu
+│   │   │   ├── transformations.py      # Logic transform chính
+│   │   │   └── validations.py          # Validation và data quality
+│   │   └── main.py                     # Entry point của ETL job
+│   ├── legacy/                         # ETL phiên bản đầu (tham khảo)
+│   │   ├── ETL.py
+│   │   └── ETL-incremental-load.py
+│   ├── scripts/                        # Utility scripts
+│   │   └── data_generator.py           # Tạo dữ liệu test vào Cassandra
+│   └── dags/                           # Airflow DAGs
+│       ├── etl.py                      # DAG ETL chính (@hourly)
+│       └── gen-data.py                 # DAG tạo dữ liệu test (*/5 * * * *)
 ├── docker/
-│   ├── spark/                   # Docker configs cho Spark
+│   ├── spark/                          # Docker configs cho Spark
 │   │   ├── Dockerfile
 │   │   ├── docker-compose.yaml
 │   │   └── spark-defaults.conf
-│   ├── airflow/                 # Docker configs cho Airflow
+│   ├── airflow/                        # Docker configs cho Airflow
 │   │   ├── Dockerfile
 │   │   └── docker-compose.yaml
-│   └── database/                # Docker configs cho MySQL & Cassandra
+│   └── database/                       # Docker configs cho MySQL & Cassandra
 │       └── docker-compose.yaml
 ├── queries/
 │   ├── mysql/
-│   │   ├── DDL/                 # Schema definitions
+│   │   ├── DDL/                        # Schema definitions
 │   │   ├── createdUserMySQL.sql
 │   │   └── addcolumnMySQL.sql
 │   └── cassandra/
 │       └── SchemaDefinedCassandra.sql
-├── data/                        # Dữ liệu CSV mẫu để seed ban đầu
+├── data/                               # Dữ liệu CSV mẫu để seed ban đầu
 │   ├── mysql/
 │   │   ├── events.csv
 │   │   └── master_publisher.csv
 │   └── cassandra/
 │       └── tracking_with_event_date.csv
-├── .env.example                 # Template biến môi trường
-├── requirements.txt             # Python dependencies
+├── .env.example                        # Template biến môi trường
+├── requirements.txt                    # Python dependencies
 └── README.md
 ```
 
@@ -319,7 +322,7 @@ Hệ thống được triển khai phân tán trên nhiều máy (EC2 instances 
 
 | Thành phần | Version | Lý do cố định |
 |---|---|---|
-| **Apache Spark** | `3.5.1` | ⚠️ **Bắt buộc** — phải khớp với Spark-Cassandra Connector |
+| **Apache Spark** | `3.5.1` |**Bắt buộc** — phải khớp với Spark-Cassandra Connector |
 | **Apache Airflow** | `2.8.1` | Base image `apache/airflow:2.8.1-python3.8` |
 | **Cassandra** | `5.0.6` | Image `cassandra:5.0.6-jammy` |
 | **MySQL** | LTS | Image `mysql:lts` |
@@ -336,7 +339,7 @@ Hệ thống được triển khai phân tán trên nhiều máy (EC2 instances 
 | `hadoop-aws` | `3.3.4` |
 | `aws-java-sdk-bundle` | `1.12.262` |
 
-> **Tại sao Spark 3.5.1 là bắt buộc?** `spark-cassandra-connector-assembly_2.12-3.5.1.jar` được build cho đúng Spark 3.5.1 + Scala 2.12. Dùng version Spark khác sẽ gây lỗi `ClassNotFoundException` hoặc binary incompatibility khi runtime.
+> **Tại sao Spark 3.5.1 là bắt buộc?** `spark-cassandra-connector-assembly_2.12-3.5.1.jar` đang là bản mới nhất tìm được, build cho đúng Spark 3.5.1 + Scala 2.12. Dùng version Spark khác sẽ gây lỗi `ClassNotFoundException` hoặc binary incompatibility khi runtime.
 
 ## 7. Cài Đặt và Triển Khai
 
@@ -437,12 +440,13 @@ docker compose up -d
 
 Truy cập Airflow UI: `http://<airflow-ec2-ip>:8080` (username/password: `airflow`/`airflow`)
 
+> **Lưu ý — Airflow instance (4GB RAM):** Build image lần đầu rất nặng (tải Spark ~500MB), instance dễ bị treo hoặc OOM trong quá trình build. Nếu gặp tình trạng này, cân nhắc nâng lên instance type **8GB RAM** (ví dụ: `m7i-flex.large` hoặc `c7i.xlarge`) để đảm bảo ổn định.
+
 ### Cài Đặt Python Dependencies (Local Development)
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# hoặc .venv\Scripts\activate  # Windows
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -476,7 +480,7 @@ Trigger DAG `gen-dummy-data` trong Airflow hoặc chạy trực tiếp:
 spark-submit \
   --master local[*] \
   --conf spark.cassandra.connection.host=localhost \
-  code/test/dummy-gennerator.py
+  code/scripts/data_generator.py
 ```
 
 **Log khi gen-dummy-data chạy thành công — load 1,868 jobs, 20 publishers, ghi 54 records vào Cassandra:**
@@ -616,6 +620,20 @@ Kiểm tra Tailscale kết nối giữa các EC2:
 ```bash
 tailscale status
 ```
+
+### Airflow UI không truy cập được sau khi bật EC2
+
+`docker compose` được cấu hình tự động chạy cùng hệ thống (on boot). Sau khi **start EC2 instance**, cần chờ **< 10 phút** để hệ thống khởi động và Airflow sẵn sàng — trong thời gian này SSH và remote dev sẽ chưa vào được.
+
+```bash
+# Khi vào được rồi, kiểm tra container có đang chạy không
+docker ps
+
+# Xem logs scheduler nếu UI chưa load
+docker logs airflow-scheduler --tail 30
+```
+
+> Instance chỉ có **4GB RAM** — để tránh tình trạng bị OOM khi chạy song song nhiều container, cân nhắc nâng lên **8GB** (`m7i-flex.large`).
 
 ### Lỗi JAR incompatibility
 

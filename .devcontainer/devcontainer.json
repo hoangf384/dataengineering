@@ -1,31 +1,30 @@
 {
   "name": "Spark Dev Container",
-
-  "dockerComposeFile": ["../docker/spark/docker-compose.yaml"],
-
-  "service": "spark-node",
-
+  "dockerComposeFile": [
+    "../docker/spark/docker-compose.yaml"
+  ],
+  "service": "spark-worker",
   "workspaceFolder": "/code",
-
   "updateRemoteUserUID": false,
   "remoteUser": "root",
   "shutdownAction": "none",
-
   "remoteEnv": {
     "SPARK_HOME": "/opt/spark",
-    "PYTHONPATH": "/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip:${containerEnv:PYTHONPATH}",
+    "PYTHONPATH": "/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip:${containerEnv:PYTHONPATH}"
   },
-
   "customizations": {
     "vscode": {
-      "extensions": ["ms-python.python", "ms-python.vscode-pylance"],
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ],
       "settings": {
         "python.defaultInterpreterPath": "/usr/bin/python3",
         "python.analysis.extraPaths": [
           "/opt/spark/python",
-          "/opt/spark/python/lib/py4j-0.10.9.7-src.zip",
-        ],
-      },
-    },
-  },
+          "/opt/spark/python/lib/py4j-0.10.9.7-src.zip"
+        ]
+      }
+    }
+  }
 }
